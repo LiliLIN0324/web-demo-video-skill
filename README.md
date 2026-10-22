@@ -1,119 +1,114 @@
-# Web Demo Video — Qoder Skill
+<div align="center">
 
-把网页 demo 录成 1080p 演示视频：可见鼠标指针、真实悬停与点击、逐帧截图保顺滑、ffmpeg 合成，可选音效与配音。
+# web-demo-video
 
-Record a web demo as a 1080p video with a visible cursor, real hover and clicks, deterministic frame capture, and optional sound design.
+**把网页 demo 录成能直接给人看的 1080p 演示视频**
 
-当前版本 **0.0.1**（上一版 0.0.0）· 改动见 [CHANGELOG.md](CHANGELOG.md)
-Current version **0.0.1** (previous: 0.0.0) · see [CHANGELOG.md](CHANGELOG.md)
+真实鼠标轨迹 · 真实点击 · 逐帧可控 · 可选声轨
+
+[![version](https://img.shields.io/badge/version-0.0.1-111111?style=flat-square)](CHANGELOG.md)
+[![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square)](LICENSE)
+[![node](https://img.shields.io/badge/Node.js-18%2B-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
+[![chrome](https://img.shields.io/badge/Chrome-system-4285F4?style=flat-square&logo=googlechrome&logoColor=white)](#依赖)
+[![stars](https://img.shields.io/github/stars/LiliLIN0324/web-demo-video-skill?style=social)](https://github.com/LiliLIN0324/web-demo-video-skill/stargazers)
+
+[快速开始](#快速开始) · [工作方式](#工作方式) · [实测效果](#实测效果) · [English](README.en.md)
+
+<a href="assets/demo.mp4"><img src="assets/demo.gif" alt="录屏演示：地图、活动详情、找场地、夜间模式与日历" width="840"></a>
+
+<sub>点图片看完整成片（33 秒，带音轨）。案例站点：转塘艺讯。</sub>
+
+</div>
 
 ---
 
-## 中文
+## 它解决什么
 
-### 这是什么
+录一个网页 demo，通常卡在三件事上：
 
-一个 [Qoder](https://qoder.com) 技能，用于把网页 / 交互 demo 录成演示视频。它不依赖录屏软件，而是用系统 Chrome 逐帧截图，因此即使页面本身只有 7fps，成片也能是均匀顺滑的 30fps。
+1. **录屏软件在低帧率页面上掉帧**——页面本身 7fps，鼠标像在飘；
+2. **点击后的白屏、骨架屏被原样录进去**——成片里全是 loading；
+3. **页面没有声音，或者声音和操作对不上**——点击声总是慢半拍。
 
-### 特点
+这个 skill 换了个思路：**不录屏，逐帧拍。**
 
-- **看得见的鼠标**：注入 32px 指针 + 点击涟漪，悬停和点击由 CDP 真实派发，页面自己的 hover / 点击逻辑全部生效
-- **点击不会丢**：按下 → 90ms → 松开，全程不移动、不截图；锚点、筛选 chip、地图列表行都能稳定点中
-- **加载剪干净**：路由骨架屏期间停止采集，成片直接切到新页面
-- **iframe 也能录**：ModelScope Studio 这类外层包装，直接操作 app frame，并隐藏水印与悬浮客服
-- **逐帧可控**：相机、滚动、时间轴都由脚本驱动，不靠页面动画
-- **无下载依赖**：用系统 Chrome，不下载 Chromium；用系统 ffmpeg，不用 Playwright 自带二进制
-- **颜色准确**：显式 full→tv + bt709，成片不会比网页原图更亮更艳
-- **声音可选**：记录每次点击 / 打字的帧号，后期对齐音效和人声；页面静音也能做出完整声轨
-- **避坑清单**：白屏、loading 闪白、坐标位移、header 拦截点击、TTS 中途复位等
+用系统 Chrome 打开页面，脚本按 30fps 驱动鼠标、滚动和相机，每帧截一张图；点击通过 CDP 真实派发，页面自己的 hover、筛选、跳转逻辑全部照常工作。最后用 ffmpeg 把帧和一条合成音轨拼成视频。
 
-### 包含
+所以：页面再卡，成片也是顺的；加载多久，剪掉就是；要不要声音，都可以做。
 
-```
-SKILL.md                     操作指南：核心思路、工作流、点击时序、加载剪辑、iframe、颜色、常见坑
-scripts/record-template.mjs  录制器模板：指针、涟漪、90ms 真实点击、加载切镜、相机、编排示例
-scripts/encode.mjs           帧序列 → mp4：自动定位 ffmpeg，首尾淡入淡出，bt709/tv
-CHANGELOG.md                 版本记录（0.0.0 → 0.0.1）
-```
+## 实测效果
 
-### 安装
+一个真实案例：地图型文化日程站「转塘艺讯」，从首页一路点到日历。
 
-克隆后把文件夹放到 Qoder 技能目录，目录名必须是 `web-demo-video`：
+![storyboard](assets/storyboard.png)
 
-```bash
-git clone https://github.com/LiliLIN0324/web-demo-video-skill.git
-mkdir -p ~/.qoder/skills
-cp -r web-demo-video-skill ~/.qoder/skills/web-demo-video
-```
+| | |
+|---|---|
+| 成片时长 | 33 秒 |
+| 分辨率 / 帧率 | 1920×1080 / 30fps |
+| 真实操作 | 13 次点击、1 次筛选、1 次滚动、1 次主题切换 |
+| 页面自身帧率 | 明显低于 30fps（地图 + React 重渲染） |
+| 白屏 / 骨架屏 | 0 帧（路由加载全部剪掉） |
+| 声轨 | 全合成：氛围垫 + 点击/过场音效，-16 LUFS |
 
-Windows（PowerShell）:
+## 特点
 
-```powershell
-git clone https://github.com/LiliLIN0324/web-demo-video-skill.git
-New-Item -ItemType Directory -Force "$HOME\.qoder\skills" | Out-Null
-Copy-Item -Recurse web-demo-video-skill "$HOME\.qoder\skills\web-demo-video"
-```
+| 能力 | 说明 |
+|---|---|
+| **点击不会丢** | 按下 → 90ms → 松开，期间不移动指针、不截图。锚点、筛选 chip、地图列表行都能稳定点中 |
+| **加载剪干净** | 路由骨架屏期间停止采集，成片直接切到新页面，而不是快进一段 loading |
+| **iframe 也能录** | ModelScope Studio 这类外层包装：直接操作 app frame，并隐藏水印与悬浮客服 |
+| **颜色不偏** | 显式 full→tv + bt709，成片不会比网页原图更亮更艳 |
+| **看得见的鼠标** | 注入 32px 指针 + 点击涟漪，`pointer-events:none`，不挡真实点击 |
+| **声音可选** | 记录每次操作的帧号，后期对齐音效/人声；页面静音也能做出完整声轨 |
+| **无额外下载** | 系统 Chrome，不下载 Chromium；系统 ffmpeg，不用 Playwright 自带二进制 |
+| **出片即清理** | `frames/` 是一次性产物，附清理约定，不会留下几百 MB 截图 |
 
-然后重启会话或执行 `/skills reload`，用 `/web-demo-video` 调用。
+## 快速开始
 
-### 快速开始
+依赖：Node.js 18+、本机 Chrome、ffmpeg（在 PATH 里，或设置 `FFMPEG`）。
 
 ```bash
 npm i playwright
 
-# 1. 复制模板，改 CFG（url、进入 demo 的按钮、要隐藏的导航、预热 URL）和编排
+# 1. 复制模板，改 CFG（url、要隐藏的导航、预热接口）和末尾的编排
 cp scripts/record-template.mjs record.mjs
-node record.mjs                 # 产出 frames/0000.png …
+node record.mjs                 # → frames/0000.png …
 
-# 2. 合成（自动找 ffmpeg）
+# 2. 合成（自动定位 ffmpeg，做 bt709/tv 转换与首尾淡入淡出）
 node scripts/encode.mjs ./frames ./out.mp4 30
 ```
 
-默认输出 1920×1080 / 30fps。需要声音时，录制过程中把点击和打字的帧号写进 `events.json`，再按 `frame / fps` 对齐音效与人声；详见 `SKILL.md` 的「声音」一节。
+需要声音时，录制过程中会把每次点击的帧号写进 `events.json`；按 `frame / fps` 对齐音效，再混流：
 
-### 依赖
-
-- Node.js 18+
-- Playwright（`npm i playwright`）
-- 本机安装的 Chrome
-- ffmpeg（在 PATH，或设置 `FFMPEG` 环境变量）
-
-### 适用场景
-
-产品 demo、交互原型、数据可视化、3D 场景、后台操作流程，以及任何“希望看起来像真人在点”的网页录像。不适合需要真实系统音频的录屏（请用专业录屏工具）。
-
----
-
-## English
-
-### What it is
-
-A [Qoder](https://qoder.com) skill that turns a web demo into a presentation video. Instead of using a screen recorder, it captures deterministic screenshots frame by frame with your installed Chrome — so even a page running at 7 fps comes out as smooth 30 fps footage.
-
-### Features
-
-- **Visible cursor**: an injected 32px pointer with click ripples; hover and clicks are dispatched through CDP, so the page's own interactions actually fire
-- **Clicks that land**: press → 90ms → release with no pointer movement or screenshot in between; anchors, filter chips and map rows all respond
-- **Clean cuts through loading**: capture pauses while the skeleton screen renders, so the video cuts straight to the new view
-- **Iframe-hosted apps**: works with wrappers like ModelScope Studio — drive the app frame and hide watermarks/assistant bubbles
-- **Full control**: camera, scrolling, and timeline are script-driven, not dependent on page animation
-- **No extra downloads**: system Chrome instead of Chromium; system ffmpeg instead of Playwright's bundled binary
-- **Accurate color**: explicit full→tv + bt709 conversion, so output never looks brighter or more saturated than the page
-- **Optional audio**: log the frame number of every click and keystroke, then align SFX and voice-over in post — even when the site is silent
-- **Pitfall checklist**: white flashes, loading overlays, shifting coordinates, headers intercepting clicks, TTS state resetting mid-capture
-
-### What's inside
-
-```
-SKILL.md                     Guide: approach, workflow, click timing, load cuts, iframes, color, pitfalls
-scripts/record-template.mjs  Recorder template: cursor, ripples, 90ms real clicks, load cuts, camera, example choreography
-scripts/encode.mjs           Frame sequence → mp4: locates ffmpeg, adds fades, bt709/tv
-CHANGELOG.md                 Version history (0.0.0 → 0.0.1)
+```bash
+ffmpeg -i video.mp4 -i audio.wav -map 0:v -map 1:a \
+  -c:v copy -c:a aac -b:a 192k -shortest -movflags +faststart out.mp4
 ```
 
-### Install
+## 工作方式
 
-Clone and place the folder in your Qoder skills directory. The folder name must be `web-demo-video`:
+```
+             CDP 真实输入（移动 / 按下 / 松开）
+ 脚本编排 ───────────────────────────────▶ 页面真实状态
+   │                                          │
+   │                            每帧 page.screenshot()
+   │                                          ▼
+   │                                 frames/0000.png …
+   │                                          │
+   └── events.json（点击帧号）───────────────┤
+                                              ▼
+                              ffmpeg（+ 合成音轨）──▶ demo.mp4
+```
+
+几个关键决定：
+
+- **为什么不用 `recordVideo`**：它依赖 Playwright 自带的 ffmpeg 二进制，境内常下载失败；而且帧率跟着页面走。
+- **为什么不用 CDP screencast**：页面只有 7fps 时，它也只会给你 7fps。
+- **为什么指针要自己画**：系统光标不会被截进 `page.screenshot()`，必须注入一个 DOM 指针；真实输入仍然走 CDP，所以页面反应是真的。
+- **为什么加载要停拍**：逐帧截图是"实时"的，页面加载 1.3 秒就会录进 1.3 秒骨架屏。停拍再继续，成片就是一次干净的切镜。
+
+## 作为 Qoder Skill 安装
 
 ```bash
 git clone https://github.com/LiliLIN0324/web-demo-video-skill.git
@@ -129,30 +124,40 @@ New-Item -ItemType Directory -Force "$HOME\.qoder\skills" | Out-Null
 Copy-Item -Recurse web-demo-video-skill "$HOME\.qoder\skills\web-demo-video"
 ```
 
-Restart the session or run `/skills reload`, then invoke `/web-demo-video`.
+重开会话或执行 `/skills reload`，然后用 `/web-demo-video` 调用。
 
-### Quick start
+## 目录
 
-```bash
-npm i playwright
-
-# 1. Copy the template; edit CFG (url, demo entry button, selectors to hide, prewarm URLs) and choreography
-cp scripts/record-template.mjs record.mjs
-node record.mjs                 # writes frames/0000.png …
-
-# 2. Encode (ffmpeg is auto-detected)
-node scripts/encode.mjs ./frames ./out.mp4 30
+```
+SKILL.md                     完整操作指南：点击时序、加载剪辑、iframe、颜色、声音、坑位
+scripts/record-template.mjs  录制器模板：指针、涟漪、90ms 点击、加载切镜、相机
+scripts/encode.mjs           帧序列 → mp4：定位 ffmpeg、淡入淡出、bt709/tv
+assets/                      演示 GIF、分镜图、成片
+CHANGELOG.md                 版本记录
 ```
 
-Output defaults to 1920×1080 at 30 fps. For sound, log click and keystroke frames into `events.json` while recording, then align SFX and voice-over by `frame / fps` — see the “声音 / Audio” section in `SKILL.md`.
+## 常见坑（完整版在 SKILL.md）
 
-### Requirements
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| 点击没反应，按钮却正常 | 按下与松开之间移动了指针或截了图 | 90ms 内不动不拍 |
+| 筛选 chip 不生效 | 按压时间过长、中间拍帧 | 缩短到约 90ms |
+| 成片里有 1 秒多白屏 | 路由骨架屏被录进去 | 停拍，等目标元素就绪再继续 |
+| 视频比网页更亮更艳 | full→tv 没转、bt709 标签缺失 | 显式 `scale` 转换 + `color_*` |
+| 录制中途浏览器消失 | 无头模式关闭、窗口被人关掉 | `headless: true` |
 
-- Node.js 18+
-- Playwright (`npm i playwright`)
-- Chrome installed locally
-- ffmpeg on your PATH, or set the `FFMPEG` environment variable
+## 版本
 
-### When to use
+当前 **0.0.1**：修正真实点击时序、加载切镜、iframe 支持、颜色转换、默认无头录制。上一版为 0.0.0。
 
-Product demos, interactive prototypes, data visualizations, 3D scenes, admin workflows — anything that should look like a real person operating the page. Not intended for recordings that need true system audio; use a dedicated screen recorder for that.
+完整改动见 [CHANGELOG.md](CHANGELOG.md)。
+
+## License
+
+[MIT](LICENSE)
+
+<div align="center">
+
+如果这个 skill 帮你省下一下午，点个 Star 就是最好的支持。
+
+</div>

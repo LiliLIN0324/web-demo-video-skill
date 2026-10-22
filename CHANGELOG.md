@@ -10,6 +10,7 @@
 - **颜色修正**：`encode.mjs` 显式做 full→tv + bt709 转换并写入 `color_*` 标签，避免 H.264 比网页原图更亮更艳。
 - **无头录制**：模板默认 `headless: true`，不抢焦点、不会被人中途关掉。
 - **工作目录清理**：`frames/` 等中间产物出片后删除，README 注明。
+- **文档重写**：README 改为项目式布局（演示 GIF、分镜图、徽章、快速开始），中英文拆分为 `README.md` / `README.en.md`。
 
 ## 0.0.0 — 2026-10-22
 
@@ -27,6 +28,7 @@ First versioned release, based on a real recording of "转塘艺讯".
 - **Color fix**: `encode.mjs` now converts full→tv and tags bt709 explicitly, so the video no longer looks brighter or more saturated than the page.
 - **Headless capture**: template defaults to `headless: true` — no stolen focus, no accidental close.
 - **Cleanup**: delete `frames/` and other intermediates after delivery.
+- **Docs rewrite**: project-style README with demo GIF, storyboard, badges and quick start; split into `README.md` (zh) and `README.en.md` (en).
 
 ## 0.0.0 — 2026-10-22
 

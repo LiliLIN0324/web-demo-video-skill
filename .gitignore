@@ -1,0 +1,5 @@
+node_modules/
+frames/
+work/
+*.log
+out.mp4
