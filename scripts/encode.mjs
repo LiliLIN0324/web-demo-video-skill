@@ -36,7 +36,10 @@ const FADE_OUT = 0.7
 const fadeOutStart = Math.max(0, duration - FADE_OUT)
 const vf =
   `fade=t=in:st=0:d=${FADE_IN},` +
-  `fade=t=out:st=${fadeOutStart.toFixed(3)}:d=${FADE_OUT},format=yuv420p`
+  `fade=t=out:st=${fadeOutStart.toFixed(3)}:d=${FADE_OUT},` +
+  // 显式 full→tv + bt709，否则 H.264 出来比网页原图更亮更艳
+  'scale=in_range=full:out_range=tv:in_color_matrix=bt709:out_color_matrix=bt709,' +
+  'format=yuv420p'
 
 const candidates = [
   process.env.FFMPEG,
@@ -82,6 +85,10 @@ const args = [
   '-crf', '18',
   '-preset', 'slow',
   '-r', String(fps),
+  '-color_primaries', 'bt709',
+  '-color_trc', 'bt709',
+  '-colorspace', 'bt709',
+  '-color_range', 'tv',
   '-movflags', '+faststart',
   out,
 ]

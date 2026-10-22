@@ -4,6 +4,9 @@
 
 Record a web demo as a 1080p video with a visible cursor, real hover and clicks, deterministic frame capture, and optional sound design.
 
+当前版本 **0.0.1**（上一版 0.0.0）· 改动见 [CHANGELOG.md](CHANGELOG.md)
+Current version **0.0.1** (previous: 0.0.0) · see [CHANGELOG.md](CHANGELOG.md)
+
 ---
 
 ## 中文
@@ -15,17 +18,22 @@ Record a web demo as a 1080p video with a visible cursor, real hover and clicks,
 ### 特点
 
 - **看得见的鼠标**：注入 32px 指针 + 点击涟漪，悬停和点击由 CDP 真实派发，页面自己的 hover / 点击逻辑全部生效
+- **点击不会丢**：按下 → 90ms → 松开，全程不移动、不截图；锚点、筛选 chip、地图列表行都能稳定点中
+- **加载剪干净**：路由骨架屏期间停止采集，成片直接切到新页面
+- **iframe 也能录**：ModelScope Studio 这类外层包装，直接操作 app frame，并隐藏水印与悬浮客服
 - **逐帧可控**：相机、滚动、时间轴都由脚本驱动，不靠页面动画
 - **无下载依赖**：用系统 Chrome，不下载 Chromium；用系统 ffmpeg，不用 Playwright 自带二进制
+- **颜色准确**：显式 full→tv + bt709，成片不会比网页原图更亮更艳
 - **声音可选**：记录每次点击 / 打字的帧号，后期对齐音效和人声；页面静音也能做出完整声轨
 - **避坑清单**：白屏、loading 闪白、坐标位移、header 拦截点击、TTS 中途复位等
 
 ### 包含
 
 ```
-SKILL.md                     操作指南：核心思路、工作流、必做细节、常见坑
-scripts/record-template.mjs  录制器模板：指针、涟漪、CDP 点击、相机、编排示例
-scripts/encode.mjs           帧序列 → mp4：自动定位 ffmpeg，首尾淡入淡出
+SKILL.md                     操作指南：核心思路、工作流、点击时序、加载剪辑、iframe、颜色、常见坑
+scripts/record-template.mjs  录制器模板：指针、涟漪、90ms 真实点击、加载切镜、相机、编排示例
+scripts/encode.mjs           帧序列 → mp4：自动定位 ffmpeg，首尾淡入淡出，bt709/tv
+CHANGELOG.md                 版本记录（0.0.0 → 0.0.1）
 ```
 
 ### 安装
@@ -85,17 +93,22 @@ A [Qoder](https://qoder.com) skill that turns a web demo into a presentation vid
 ### Features
 
 - **Visible cursor**: an injected 32px pointer with click ripples; hover and clicks are dispatched through CDP, so the page's own interactions actually fire
+- **Clicks that land**: press → 90ms → release with no pointer movement or screenshot in between; anchors, filter chips and map rows all respond
+- **Clean cuts through loading**: capture pauses while the skeleton screen renders, so the video cuts straight to the new view
+- **Iframe-hosted apps**: works with wrappers like ModelScope Studio — drive the app frame and hide watermarks/assistant bubbles
 - **Full control**: camera, scrolling, and timeline are script-driven, not dependent on page animation
 - **No extra downloads**: system Chrome instead of Chromium; system ffmpeg instead of Playwright's bundled binary
+- **Accurate color**: explicit full→tv + bt709 conversion, so output never looks brighter or more saturated than the page
 - **Optional audio**: log the frame number of every click and keystroke, then align SFX and voice-over in post — even when the site is silent
 - **Pitfall checklist**: white flashes, loading overlays, shifting coordinates, headers intercepting clicks, TTS state resetting mid-capture
 
 ### What's inside
 
 ```
-SKILL.md                     Guide: approach, workflow, must-dos, common pitfalls
-scripts/record-template.mjs  Recorder template: cursor, ripples, CDP clicks, camera, example choreography
-scripts/encode.mjs           Frame sequence → mp4: locates ffmpeg, adds fades
+SKILL.md                     Guide: approach, workflow, click timing, load cuts, iframes, color, pitfalls
+scripts/record-template.mjs  Recorder template: cursor, ripples, 90ms real clicks, load cuts, camera, example choreography
+scripts/encode.mjs           Frame sequence → mp4: locates ffmpeg, adds fades, bt709/tv
+CHANGELOG.md                 Version history (0.0.0 → 0.0.1)
 ```
 
 ### Install

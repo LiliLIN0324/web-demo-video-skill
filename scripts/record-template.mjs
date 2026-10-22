@@ -34,6 +34,10 @@ const CFG = {
 
   // 指针入场/离场停在画外
   park: [1980, 1160],
+
+  // 无头模式：不弹窗、不抢用户焦点，避免录制中途被人关掉。
+  // 需要肉眼盯着调试时改成 false。
+  headless: true,
 }
 
 const W = CFG.width
@@ -44,7 +48,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 fs.rmSync(CFG.outDir, { recursive: true, force: true })
 fs.mkdirSync(CFG.outDir, { recursive: true })
 
-const browser = await chromium.launch({ channel: 'chrome' })
+const browser = await chromium.launch({ channel: 'chrome', headless: CFG.headless });
 const ctx = await browser.newContext({
   viewport: { width: W, height: H },
   deviceScaleFactor: 1,
@@ -106,7 +110,6 @@ const cam = CFG.camera
 let theta = cam ? cam.start : 0
 let idx = 0
 let ripple = null
-let dragging = false
 let cur = [...CFG.park]
 
 const setAngle = async (t) => {
@@ -128,9 +131,9 @@ async function frame(x, y, orbit = true, age = -1) {
   cur = [x, y]
   await setAngle(theta)
   await mouse('mouseMoved', Math.round(x), Math.round(y))
-  await page.evaluate(([cx, cy, rx, ry, a, down]) => {
+  await page.evaluate(([cx, cy, rx, ry, a]) => {
     const c = document.getElementById('__cur')
-    c.style.transform = `translate(${cx - 6.6}px, ${cy - 3.3}px) scale(${down ? 0.86 : 1})`
+    c.style.transform = `translate(${cx - 6.6}px, ${cy - 3.3}px)`
     const r = document.getElementById('__rip')
     if (a < 0) r.style.opacity = 0
     else {
@@ -138,7 +141,7 @@ async function frame(x, y, orbit = true, age = -1) {
       r.style.opacity = String((1 - p) * 0.9)
       r.style.transform = `translate(${rx - 22}px, ${ry - 22}px) scale(${0.4 + p * 1.1})`
     }
-  }, [x, y, ripple ? ripple.x : 0, ripple ? ripple.y : 0, age, dragging])
+  }, [x, y, ripple ? ripple.x : 0, ripple ? ripple.y : 0, age])
   await page.screenshot({ path: `${CFG.outDir}/${String(idx).padStart(4, '0')}.png` })
   idx++
 }
@@ -155,18 +158,30 @@ async function hold(p, n, orbit = true) {
   for (let i = 0; i < n; i++) await frame(p[0], p[1], orbit, ripAge())
 }
 
-// settle 期间不拍帧：让 React 重渲染完，避免白屏/跳帧
+// 真实点击的关键：按下 → 停 90ms → 松开，全程不移动指针、不截图。
+// 中途挪指针或拍帧会让不少站点（<a>、筛选 chip、地图行）吞掉这次点击。
+// settle 期间不拍帧：让页面重渲染完，避免白屏/跳帧。
 async function clickAt(p, settle = 0) {
   await mouse('mouseMoved', p[0], p[1])
   await mouse('mousePressed', p[0], p[1], { button: 'left', buttons: 1, clickCount: 1 })
-  dragging = true
-  await frame(p[0], p[1], true, -1)
-  dragging = false
+  await sleep(90)
   await cdp.send('Input.dispatchMouseEvent', {
     type: 'mouseReleased', x: p[0], y: p[1], button: 'left', buttons: 0, clickCount: 1,
   })
-  ripple = { x: p[0], y: p[1], frame: idx - 1 }
+  ripple = { x: p[0], y: p[1], frame: idx }
+  await frame(p[0], p[1], true, 0)
   if (settle) await sleep(settle)
+}
+
+// 页面路由切换会先渲染骨架屏/白屏。这期间不要拍帧，等内容就绪再继续 hold，
+// 成片里就是一次干净的切镜，而不是 1 秒多的 loading。
+async function waitFor(sel, ms = 12000) {
+  const t0 = Date.now()
+  while (Date.now() - t0 < ms) {
+    if (await page.locator(sel).first().isVisible().catch(() => false)) return true
+    await sleep(200)
+  }
+  return false
 }
 
 // 坐标必须现测：状态一变布局会位移
@@ -200,6 +215,11 @@ const beats = async () => {
 
   // 例：点列表/图例里的某一项（索引从 0 开始，坐标每次现测）
   // await clickSelector('.legend .legendtoggle >> nth=2')
+
+  // 例：点击后整页跳转（路由先渲染骨架屏）——点完不拍帧，等新页就绪再继续
+  // await clickSelector('.card >> nth=0', { settle: 0, after: 0 })
+  // await waitFor('.detail-title')
+  // await hold(cur, 20)
 
   // 收尾：指针移开，停 2–3 秒再切黑
   await glide([W * 0.78, H * 0.6], 34)
