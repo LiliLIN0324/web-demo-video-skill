@@ -1,11 +1,13 @@
 ---
 name: web-demo-video
-version: 0.0.1
+version: 0.0.2
 description: 把网页/交互 demo 录成 1080p 演示视频：可见鼠标指针、真实悬停与点击、逐帧截图保顺滑、ffmpeg 合成。Use when asked to record a web demo, make a product/demo video from a live page, or "simulate mouse operations" for a video. 触发词：录 demo、录屏、演示视频、操作视频、鼠标演示、模拟鼠标、点按钮。
 when_to_use: 用户要求把某个网页或 demo 录成视频，尤其是要求"要有鼠标操作感"时。
 ---
 
-# Web Demo Video
+# 演录 · Web Demo Video
+
+不绑定 Qoder。`AGENTS.md` 是给其他 agent（Codex / Claude Code / Gemini / Grok / DeepSeek 等）的通用入口，本文件是完整指南，二者内容一致。
 
 ## 核心思路
 

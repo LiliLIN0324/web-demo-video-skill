@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.2 — 2026-10-23
+
+不再只面向 Qoder。
+
+- **新增 `AGENTS.md`**：通用入口，任何能读写文件、能跑命令的 agent（Codex、Claude Code、Gemini CLI、Grok CLI、DeepSeek harness、Cursor、Windsurf、Aider…）读这一份就能开工，含 8 条不可省略的硬规则与最短流程。中文表述，英文 agent 同样可执行。
+- **新增 `CLAUDE.md` / `GEMINI.md`**：给只认固定文件名的 agent 做指向。
+- **安装说明通用化**：README 中英双版改为「最省事（克隆 + 一句话）」「装成技能（Qoder / Claude Code / 其他）」「项目级」三种方式。
+- **技能名**：对外展示名「演录」，目录名与调用名仍为 `web-demo-video`。
+
 ## 0.0.1 — 2026-10-22
 
 首次带版本号的更新，基于「转塘艺讯」实战录制。

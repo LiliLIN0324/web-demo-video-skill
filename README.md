@@ -6,7 +6,7 @@
 
 真实鼠标轨迹 · 真实点击 · 逐帧可控 · 可选声轨
 
-[![version](https://img.shields.io/badge/version-0.0.1-111111?style=flat-square)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.0.2-111111?style=flat-square)](CHANGELOG.md)
 [![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square)](LICENSE)
 [![node](https://img.shields.io/badge/Node.js-18%2B-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 [![chrome](https://img.shields.io/badge/Chrome-system-4285F4?style=flat-square&logo=googlechrome&logoColor=white)](#依赖)
@@ -108,28 +108,48 @@ ffmpeg -i video.mp4 -i audio.wav -map 0:v -map 1:a \
 - **为什么指针要自己画**：系统光标不会被截进 `page.screenshot()`，必须注入一个 DOM 指针；真实输入仍然走 CDP，所以页面反应是真的。
 - **为什么加载要停拍**：逐帧截图是"实时"的，页面加载 1.3 秒就会录进 1.3 秒骨架屏。停拍再继续，成片就是一次干净的切镜。
 
-## 作为 Qoder Skill 安装
+## 在任何 agent 里用
+
+不绑定 Qoder。仓库根目录有 `AGENTS.md`（通用入口）和 `SKILL.md`（完整指南），任何能读写文件、能跑命令的 agent 都能照做：Codex、Claude Code、Gemini CLI、Grok CLI、DeepSeek harness、Cursor、Windsurf、Aider……
+
+**最省事的方式**——克隆到任意位置，然后对 agent 说：
 
 ```bash
 git clone https://github.com/LiliLIN0324/web-demo-video-skill.git
+```
+
+> 读 `web-demo-video-skill/AGENTS.md`，把 https://example.com/demo 录成演示视频。
+
+**装成技能**（自动触发，不用每次指路）：
+
+| Agent | 安装位置 |
+|---|---|
+| Qoder | `~/.qoder/skills/web-demo-video` |
+| Claude Code | `~/.claude/skills/web-demo-video` |
+| 其他 | 放进你的 agent 读取的规则/技能目录 |
+
+```bash
+# 以 Qoder 为例
 mkdir -p ~/.qoder/skills
 cp -r web-demo-video-skill ~/.qoder/skills/web-demo-video
 ```
 
-Windows (PowerShell):
-
 ```powershell
-git clone https://github.com/LiliLIN0324/web-demo-video-skill.git
+# Windows (PowerShell)
 New-Item -ItemType Directory -Force "$HOME\.qoder\skills" | Out-Null
 Copy-Item -Recurse web-demo-video-skill "$HOME\.qoder\skills\web-demo-video"
 ```
 
 重开会话或执行 `/skills reload`，然后用 `/web-demo-video` 调用。
 
+**项目级**：把 `AGENTS.md`、`SKILL.md`、`scripts/` 放进你的项目，agent 打开项目就会读到。
+
 ## 目录
 
 ```
 SKILL.md                     完整操作指南：点击时序、加载剪辑、iframe、颜色、声音、坑位
+AGENTS.md                    通用入口：任何 agent 读这一份就能开工
+CLAUDE.md / GEMINI.md        指向 AGENTS.md（给只认固定文件名的 agent）
 scripts/record-template.mjs  录制器模板：指针、涟漪、90ms 点击、加载切镜、相机
 scripts/encode.mjs           帧序列 → mp4：定位 ffmpeg、淡入淡出、bt709/tv
 assets/                      演示 GIF、分镜图、成片
@@ -148,7 +168,7 @@ CHANGELOG.md                 版本记录
 
 ## 版本
 
-当前 **0.0.1**：修正真实点击时序、加载切镜、iframe 支持、颜色转换、默认无头录制。上一版为 0.0.0。
+当前 **0.0.2**：通用化——新增 `AGENTS.md` 通用入口，Qoder 之外的 Codex / Claude Code / Gemini / Grok / DeepSeek 等 agent 可直接使用。上一版 0.0.1 修正点击时序、加载切镜、iframe、颜色与无头录制；0.0.0 为首版。
 
 完整改动见 [CHANGELOG.md](CHANGELOG.md)。
 

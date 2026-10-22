@@ -6,7 +6,7 @@
 
 Real cursor movement · real clicks · deterministic frames · optional soundtrack
 
-[![version](https://img.shields.io/badge/version-0.0.1-111111?style=flat-square)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.0.2-111111?style=flat-square)](CHANGELOG.md)
 [![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square)](LICENSE)
 [![node](https://img.shields.io/badge/Node.js-18%2B-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 [![chrome](https://img.shields.io/badge/Chrome-system-4285F4?style=flat-square&logo=googlechrome&logoColor=white)](#requirements)
@@ -108,28 +108,48 @@ Key decisions:
 - **Draw the cursor yourself**: system cursors are not captured by `page.screenshot()`. Input still goes through CDP, so the page reacts for real.
 - **Stop capturing during loads**: capture runs in real time, so a 1.3s skeleton becomes 1.3s of footage. Pause, wait, resume — that is your clean cut.
 
-## Install as a Qoder skill
+## Use it with any agent
+
+Not tied to Qoder. The repo root ships `AGENTS.md` (universal entry) and `SKILL.md` (full guide), so any agent that can read files and run commands can follow it: Codex, Claude Code, Gemini CLI, Grok CLI, DeepSeek harness, Cursor, Windsurf, Aider…
+
+**Quickest path** — clone it anywhere, then tell your agent:
 
 ```bash
 git clone https://github.com/LiliLIN0324/web-demo-video-skill.git
+```
+
+> Read `web-demo-video-skill/AGENTS.md` and record https://example.com/demo as a demo video.
+
+**Install as a skill** (auto-triggered, no need to point at it every time):
+
+| Agent | Install path |
+|---|---|
+| Qoder | `~/.qoder/skills/web-demo-video` |
+| Claude Code | `~/.claude/skills/web-demo-video` |
+| Others | your agent's rules/skills directory |
+
+```bash
+# Qoder example
 mkdir -p ~/.qoder/skills
 cp -r web-demo-video-skill ~/.qoder/skills/web-demo-video
 ```
 
-Windows (PowerShell):
-
 ```powershell
-git clone https://github.com/LiliLIN0324/web-demo-video-skill.git
+# Windows (PowerShell)
 New-Item -ItemType Directory -Force "$HOME\.qoder\skills" | Out-Null
 Copy-Item -Recurse web-demo-video-skill "$HOME\.qoder\skills\web-demo-video"
 ```
 
 Restart the session or run `/skills reload`, then invoke `/web-demo-video`.
 
+**Project-level**: drop `AGENTS.md`, `SKILL.md` and `scripts/` into your project — the agent reads them when it opens the repo.
+
 ## Layout
 
 ```
 SKILL.md                     Full guide: click timing, load cuts, iframes, color, audio, pitfalls
+AGENTS.md                    Universal entry: any agent can start from this file
+CLAUDE.md / GEMINI.md        Pointers to AGENTS.md for agents that only read fixed filenames
 scripts/record-template.mjs  Recorder template: cursor, ripple, 90ms clicks, load cuts, camera
 scripts/encode.mjs           Frames → mp4: locates ffmpeg, fades, bt709/tv
 assets/                      Demo GIF, storyboard, full video
@@ -148,7 +168,7 @@ CHANGELOG.md                 Version history
 
 ## Version
 
-Current **0.0.1**: fixed click timing, load cuts, iframe support, color conversion, headless by default. Previous: 0.0.0.
+Current **0.0.2**: agent-agnostic — `AGENTS.md` added so Codex, Claude Code, Gemini, Grok, DeepSeek and other agents can use this directly. 0.0.1 fixed click timing, load cuts, iframes, color and headless capture; 0.0.0 was the first release.
 
 See [CHANGELOG.md](CHANGELOG.md).
 
