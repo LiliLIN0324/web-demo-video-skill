@@ -14,7 +14,7 @@
 
 [快速开始](#快速开始) · [工作方式](#工作方式) · [实测效果](#实测效果) · [English](README.en.md)
 
-<a href="assets/demo.mp4"><img src="assets/demo.gif" alt="录屏演示：登录、创建向导、侧栏快览、查看成品" width="840"></a>
+<a href="assets/cover.mp4"><img src="assets/cover.gif" alt="录屏演示：登录、创建向导、侧栏快览、查看成品" width="840"></a>
 
 <sub>点图片看完整成片（42 秒，带合成配乐）。案例站点：推鉴 · AI 营销助手（ModelScope Studio）。</sub>
 

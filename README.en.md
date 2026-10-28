@@ -14,7 +14,7 @@ Real cursor movement · real clicks · deterministic frames · optional soundtra
 
 [Quick start](#quick-start) · [How it works](#how-it-works) · [中文](README.md)
 
-<a href="assets/demo.mp4"><img src="assets/demo.gif" alt="Demo: login, creation wizard, sidebar tour, finished result" width="840"></a>
+<a href="assets/cover.mp4"><img src="assets/cover.gif" alt="Demo: login, creation wizard, sidebar tour, finished result" width="840"></a>
 
 <sub>Click to watch the full 42-second cut with synthesized music. Demo site: 推鉴 · AI Marketing Assistant (ModelScope Studio).</sub>
 

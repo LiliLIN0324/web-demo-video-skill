@@ -55,7 +55,7 @@ AGENTS.md                     本文件：通用入口
 scripts/record-template.mjs   录制器模板（含缩放运镜原语）
 scripts/encode.mjs            帧序列 → mp4
 scripts/music.mjs             合成配乐（events.json 点击对齐）
-assets/                       demo.gif / 分镜 / 成片
+assets/                       cover.gif / 分镜 / 成片
 ```
 
 依赖：Node 18+、Playwright、本机 Chrome、ffmpeg（PATH 或 `FFMPEG` 环境变量）。
