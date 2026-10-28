@@ -14,9 +14,9 @@ Real cursor movement · real clicks · deterministic frames · optional soundtra
 
 [Quick start](#quick-start) · [How it works](#how-it-works) · [中文](README.md)
 
-<a href="assets/demo.mp4"><img src="assets/demo.gif" alt="Demo: map, event detail, venue finder, night mode and calendar" width="840"></a>
+<a href="assets/demo.mp4"><img src="assets/demo.gif" alt="Demo: login, creation wizard, sidebar tour, finished result" width="840"></a>
 
-<sub>Click to watch the full 33-second cut with sound. Demo site: 转塘艺讯.</sub>
+<sub>Click to watch the full 42-second cut with synthesized music. Demo site: 推鉴 · AI Marketing Assistant (ModelScope Studio).</sub>
 
 </div>
 
@@ -38,18 +38,19 @@ The page can render at 7fps — the output is still smooth. Loading can take as 
 
 ## In practice
 
-A real case: a map-based culture calendar, from the home map all the way to the calendar.
+A real case: an AI marketing assistant hosted on ModelScope Studio — from login through the creation wizard and a sidebar tour, all the way to a finished deliverable.
 
 ![storyboard](assets/storyboard.png)
 
 | | |
 |---|---|
-| Runtime | 33 s |
+| Runtime | 42 s |
 | Resolution / fps | 1920×1080 / 30fps |
-| Interactions | 13 real clicks, 1 filter, 1 scroll, 1 theme switch |
-| Page's own frame rate | well below 30fps (map + React re-renders) |
+| Interactions | 16 real clicks, 1 smooth scroll, 10 page states |
+| Zoom camera | opening push-in + 2 punch-ins + closing pull-back |
+| Host | iframe-embedded app (ms.show), watermark/floating widgets handled |
 | Skeleton / white frames | 0 (route loading cut out) |
-| Audio | fully synthesized: ambient pad + click/transition SFX at -16 LUFS |
+| Audio | fully synthesized score (126 BPM, click-aligned ticks) at -15 LUFS |
 
 ## Features
 
