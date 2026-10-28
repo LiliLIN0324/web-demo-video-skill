@@ -6,7 +6,7 @@
 
 Real cursor movement · real clicks · deterministic frames · optional soundtrack
 
-[![version](https://img.shields.io/badge/version-0.0.2-111111?style=flat-square)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.1.0-111111?style=flat-square)](CHANGELOG.md)
 [![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square)](LICENSE)
 [![node](https://img.shields.io/badge/Node.js-18%2B-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 [![chrome](https://img.shields.io/badge/Chrome-system-4285F4?style=flat-square&logo=googlechrome&logoColor=white)](#requirements)
@@ -168,7 +168,7 @@ CHANGELOG.md                 Version history
 
 ## Version
 
-Current **0.0.2**: agent-agnostic — `AGENTS.md` added so Codex, Claude Code, Gemini, Grok, DeepSeek and other agents can use this directly. 0.0.1 fixed click timing, load cuts, iframes, color and headless capture; 0.0.0 was the first release.
+Current **0.1.0**: camera language and one-command soundtrack — zoom primitives (`zoomTo`/`zoomPunch`, `CFG.zoomSelector`) and a pure-node synthesized score `scripts/music.mjs` (click frames auto-aligned ticks); the template now writes `events.json` by default. 0.0.2 made the skill agent-agnostic (`AGENTS.md`); 0.0.1 fixed click timing, load cuts, iframes, color and headless capture; 0.0.0 was the first release.
 
 See [CHANGELOG.md](CHANGELOG.md).
 

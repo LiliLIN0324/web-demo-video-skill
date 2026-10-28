@@ -6,7 +6,7 @@
 
 真实鼠标轨迹 · 真实点击 · 逐帧可控 · 可选声轨
 
-[![version](https://img.shields.io/badge/version-0.0.2-111111?style=flat-square)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.1.0-111111?style=flat-square)](CHANGELOG.md)
 [![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square)](LICENSE)
 [![node](https://img.shields.io/badge/Node.js-18%2B-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 [![chrome](https://img.shields.io/badge/Chrome-system-4285F4?style=flat-square&logo=googlechrome&logoColor=white)](#依赖)
@@ -60,6 +60,8 @@
 | **iframe 也能录** | ModelScope Studio 这类外层包装：直接操作 app frame，并隐藏水印与悬浮客服 |
 | **颜色不偏** | 显式 full→tv + bt709，成片不会比网页原图更亮更艳 |
 | **看得见的鼠标** | 注入 32px 指针 + 点击涟漪，`pointer-events:none`，不挡真实点击 |
+| **缩放运镜** | `zoomTo` / `zoomPunch` 对宿主元素逐帧 scale，开场推近、区域强调、结尾拉远 |
+| **一键配乐** | `music.mjs` 纯 node 合成 WAV（kick/bass/琶音/pad），点击帧自动对齐 tick 音 |
 | **声音可选** | 记录每次操作的帧号，后期对齐音效/人声；页面静音也能做出完整声轨 |
 | **无额外下载** | 系统 Chrome，不下载 Chromium；系统 ffmpeg，不用 Playwright 自带二进制 |
 | **出片即清理** | `frames/` 是一次性产物，附清理约定，不会留下几百 MB 截图 |
@@ -71,19 +73,20 @@
 ```bash
 npm i playwright
 
-# 1. 复制模板，改 CFG（url、要隐藏的导航、预热接口）和末尾的编排
+# 1. 复制模板，改 CFG（url、要隐藏的导航、预热接口、zoomSelector）和末尾的编排
 cp scripts/record-template.mjs record.mjs
-node record.mjs                 # → frames/0000.png …
+node record.mjs                 # → frames/0000.png … + events.json
 
 # 2. 合成（自动定位 ffmpeg，做 bt709/tv 转换与首尾淡入淡出）
 node scripts/encode.mjs ./frames ./out.mp4 30
 ```
 
-需要声音时，录制过程中会把每次点击的帧号写进 `events.json`；按 `frame / fps` 对齐音效，再混流：
+需要配乐时一条命令（126 BPM A 小调，点击帧自动对齐 tick 音）：
 
 ```bash
-ffmpeg -i video.mp4 -i audio.wav -map 0:v -map 1:a \
-  -c:v copy -c:a aac -b:a 192k -shortest -movflags +faststart out.mp4
+node scripts/music.mjs ./frames ./events.json ./score.wav 30
+ffmpeg -i out.mp4 -i score.wav -map 0:v -map 1:a -c:v copy \
+  -af loudnorm=I=-15:TP=-1.5:LRA=11 -c:a aac -b:a 160k -shortest -movflags +faststart final.mp4
 ```
 
 ## 工作方式
@@ -150,8 +153,9 @@ Copy-Item -Recurse web-demo-video-skill "$HOME\.qoder\skills\web-demo-video"
 SKILL.md                     完整操作指南：点击时序、加载剪辑、iframe、颜色、声音、坑位
 AGENTS.md                    通用入口：任何 agent 读这一份就能开工
 CLAUDE.md / GEMINI.md        指向 AGENTS.md（给只认固定文件名的 agent）
-scripts/record-template.mjs  录制器模板：指针、涟漪、90ms 点击、加载切镜、相机
+scripts/record-template.mjs  录制器模板：指针、涟漪、90ms 点击、加载切镜、缩放运镜、相机
 scripts/encode.mjs           帧序列 → mp4：定位 ffmpeg、淡入淡出、bt709/tv
+scripts/music.mjs            合成配乐：鼓组 + 琶音 + pad，events.json 点击帧对齐 tick
 assets/                      演示 GIF、分镜图、成片
 CHANGELOG.md                 版本记录
 ```
@@ -168,7 +172,7 @@ CHANGELOG.md                 版本记录
 
 ## 版本
 
-当前 **0.0.2**：通用化——新增 `AGENTS.md` 通用入口，Qoder 之外的 Codex / Claude Code / Gemini / Grok / DeepSeek 等 agent 可直接使用。上一版 0.0.1 修正点击时序、加载切镜、iframe、颜色与无头录制；0.0.0 为首版。
+当前 **0.1.0**：镜头语言与一键配乐——新增缩放运镜原语（`zoomTo`/`zoomPunch`，`CFG.zoomSelector`）与纯 node 合成配乐 `scripts/music.mjs`（点击帧对齐 tick），模板默认写 `events.json`。上一版 0.0.2 通用化（`AGENTS.md`），0.0.1 修正点击时序、加载切镜、iframe、颜色与无头录制；0.0.0 为首版。
 
 完整改动见 [CHANGELOG.md](CHANGELOG.md)。
 

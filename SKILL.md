@@ -1,7 +1,7 @@
 ---
 name: web-demo-video
-version: 0.0.2
-description: 把网页/交互 demo 录成 1080p 演示视频：可见鼠标指针、真实悬停与点击、逐帧截图保顺滑、ffmpeg 合成。Use when asked to record a web demo, make a product/demo video from a live page, or "simulate mouse operations" for a video. 触发词：录 demo、录屏、演示视频、操作视频、鼠标演示、模拟鼠标、点按钮。
+version: 0.1.0
+description: 把网页/交互 demo 录成 1080p 演示视频：可见鼠标指针、真实悬停与点击、逐帧截图保顺滑、缩放运镜、合成配乐、ffmpeg 合成。Use when asked to record a web demo, make a product/demo video from a live page, or "simulate mouse operations" for a video. 触发词：录 demo、录屏、演示视频、操作视频、鼠标演示、模拟鼠标、点按钮。
 when_to_use: 用户要求把某个网页或 demo 录成视频，尤其是要求"要有鼠标操作感"时。
 ---
 
@@ -24,10 +24,10 @@ when_to_use: 用户要求把某个网页或 demo 录成视频，尤其是要求"
 ## 工作流
 
 1. **探测**：用 Chrome 打开页面，进到 demo，读 `WEBGL_debug_renderer_info` 和实际重绘帧率。若应用自身只有 ~7fps（React 每帧 setState 重渲染很常见），逐帧截图方案更有必要。
-2. **搭录制器**：复制 [scripts/record-template.mjs](scripts/record-template.mjs)，改 `CFG`（url、进入 demo 的按钮、要隐藏的站点导航、预热 URL），再写编排（`glide` / `hold` / `clickSelector`）。
-3. **录制**：`node record.mjs`，产出 `frames/0000.png …`。用无头 Chrome 跑，避免弹窗抢焦点、或被人中途关掉。
+2. **搭录制器**：复制 [scripts/record-template.mjs](scripts/record-template.mjs)，改 `CFG`（url、进入 demo 的按钮、要隐藏的站点导航、预热 URL、`zoomSelector`），再写编排（`glide` / `hold` / `clickSelector` / `zoomPunch`）。
+3. **录制**：`node record.mjs`，产出 `frames/0000.png …` 和 `events.json`（点击/运镜帧号）。用无头 Chrome 跑，避免弹窗抢焦点、或被人中途关掉。
 4. **合成**：`node scripts/encode.mjs ./frames ./out.mp4 30`（自动找 ffmpeg，加首尾淡入淡出，显式 bt709/tv 转换）。
-5. **声音**：需要声音时，按 `events.json` 合成音轨，再用 `-c:v copy -c:a aac -b:a 192k -shortest` 混流。
+5. **声音**：`node scripts/music.mjs ./frames ./events.json ./score.wav 30` 合成配乐（点击帧自动对齐 tick 音），再用 `-c:v copy -af loudnorm=I=-15:TP=-1.5 -c:a aac -shortest` 混流。
 6. **验收**：抽帧拼图看一遍，重点看点击瞬间、状态切换、结尾；再看一眼响度。给用户看文件路径和节奏表。
 7. **清理**：`frames/` 是临时产物（上千张 PNG，常达几百 MB），出片后删掉；只留成片和三件套脚本。
 
@@ -110,6 +110,21 @@ SPA 路由跳转、或点"查看完整活动"这类链接，往往会先渲染 1
 - 氛围音压到 -33 dB 左右，语音约 -20 dB；混完用 `loudnorm` 检查（-17 ~ -15 LUFS），峰值别过 0 dBFS。
 - 视频先无音轨编码，最后 `ffmpeg -i video.mp4 -i audio.wav -map 0:v -map 1:a -c:v copy -c:a aac -b:a 192k -shortest -movflags +faststart out.mp4`。
 
+## 缩放运镜（0.1.0 新增）
+
+页面本身没有相机 API 时，最直接的"镜头语言"是对宿主元素做 CSS 缩放。模板里两个原语：
+
+- `zoomTo(s, fx, fy, n)`：缓动插值 scale 与焦点；开场 `1.14 → 1` 是经典推近定场，结尾 `→ 0.94` 是拉远收版。
+- `zoomPunch(fx, fy, peak, nIn, holdN, nOut)`：短促推近再拉回，用来强调数据面板、配图区、刚更新完的按钮。
+
+规则：
+
+- **对宿主元素做 `transform: scale()`**，不要改布局（`zoom`/`width`），否则页面会重排、元素位移。iframe 内嵌应用就对顶层 `iframe` 元素做，配 `CFG.zoomSelector = 'iframe'`。
+- `transform-origin` 相对元素自身，而你的焦点是视口坐标——先记下元素未缩放时的 `getBoundingClientRect()`，原点 = 焦点 − 元素左上。
+- **scale≠1 时禁止点击**：缩放中视觉位置 ≠ 布局坐标，`boundingBox()` 量出来的点必飘。`clickAt` 里有硬检查；编排上把 zoomPunch 放在两次点击之间，回到 1 再点。
+- 指针和涟漪注入在顶层文档（`position:fixed`），不受宿主缩放影响——这正是你要的：画面推近，光标保持锐利。
+- 运镜逐帧插值（缓动用 ease-in-out-cubic），不要用 CSS transition——截图节奏和 transition 时钟对不上会抖。
+
 ## 相机/动画驱动
 
 不是所有页面都有"相机"。可选做法：
@@ -129,13 +144,14 @@ ffmpeg -framerate 30 -i frames/%04d.png \
   -movflags +faststart out.mp4
 ```
 
-页面本身没有音频时，也可以合成一条：低频 pad 和弦 + 淡噪底 + 五声音阶铃声 + 点击/过场音效，按 `events.json` 的帧号落点，最后 `loudnorm` 到 -17 ~ -15 LUFS、真峰值低于 -2 dBFS。
+页面本身没有音频时，用 `scripts/music.mjs` 合成一条：126 BPM A 小调（kick/bass/hats/snare/琶音/pad），按 `events.json` 的点击帧落 tick 音，`loudnorm` 到 -17 ~ -15 LUFS、真峰值低于 -2 dBFS。BPM 和调式在脚本参数/常量里改。
 
 帧数不一致时可用 `xfade` 拼接多段（每段同一机位，溶解时才不跳）。
 
 ## 资源
 
-- [scripts/record-template.mjs](scripts/record-template.mjs) — 录制器模板（指针、涟漪、90ms 真实点击、加载切镜、相机）
+- [scripts/record-template.mjs](scripts/record-template.mjs) — 录制器模板（指针、涟漪、90ms 真实点击、加载切镜、缩放运镜、相机、events.json）
 - [scripts/encode.mjs](scripts/encode.mjs) — 帧序列 → mp4（自动定位 ffmpeg，首尾淡入淡出，bt709/tv）
+- [scripts/music.mjs](scripts/music.mjs) — 合成配乐（kick/bass/hats/snare/琶音/pad + 点击 tick 对齐，纯 node 写 WAV）
 - [CHANGELOG.md](CHANGELOG.md) — 版本与改动
 - 依赖：`npm i playwright`，且本机装有 Chrome

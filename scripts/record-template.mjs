@@ -32,6 +32,11 @@ const CFG = {
     start: 0.35,
   },
 
+  // 缩放运镜：对某个宿主元素逐帧设 transform: scale()。
+  // iframe 内嵌应用填 'iframe'；普通页面可填 'main'/'#app' 等；null 禁用。
+  // 注意：指针注入在顶层文档、不受影响；点击只允许在 scale=1 时做（见 clickAt）。
+  zoomSelector: null,
+
   // 指针入场/离场停在画外
   park: [1980, 1160],
 
@@ -111,6 +116,17 @@ let theta = cam ? cam.start : 0
 let idx = 0
 let ripple = null
 let cur = [...CFG.park]
+const events = [] // 每次点击/运镜记帧号，后期配乐按 frame/fps 对齐
+
+// 运镜基准：元素未缩放时的视口位置（transform-origin 要用相对元素自身的坐标）
+let zoom = { s: 1, fx: W / 2, fy: H / 2 }
+let zoomBase = null
+if (CFG.zoomSelector) {
+  zoomBase = await page.evaluate((sel) => {
+    const r = document.querySelector(sel).getBoundingClientRect()
+    return [r.x, r.y]
+  }, CFG.zoomSelector)
+}
 
 const setAngle = async (t) => {
   if (!cam) return
@@ -131,7 +147,7 @@ async function frame(x, y, orbit = true, age = -1) {
   cur = [x, y]
   await setAngle(theta)
   await mouse('mouseMoved', Math.round(x), Math.round(y))
-  await page.evaluate(([cx, cy, rx, ry, a]) => {
+  await page.evaluate(([cx, cy, rx, ry, a, zs, zfx, zfy, zsel, zbx, zby]) => {
     const c = document.getElementById('__cur')
     c.style.transform = `translate(${cx - 6.6}px, ${cy - 3.3}px)`
     const r = document.getElementById('__rip')
@@ -141,7 +157,18 @@ async function frame(x, y, orbit = true, age = -1) {
       r.style.opacity = String((1 - p) * 0.9)
       r.style.transform = `translate(${rx - 22}px, ${ry - 22}px) scale(${0.4 + p * 1.1})`
     }
-  }, [x, y, ripple ? ripple.x : 0, ripple ? ripple.y : 0, age])
+    // 运镜：transform-origin 相对元素自身，所以要减去元素未缩放时的位置
+    if (zsel) {
+      const z = document.querySelector(zsel)
+      if (zs === 1) z.style.transform = 'none'
+      else {
+        z.style.transformOrigin = `${zfx - zbx}px ${zfy - zby}px`
+        z.style.transform = `scale(${zs})`
+      }
+    }
+  }, [x, y, ripple ? ripple.x : 0, ripple ? ripple.y : 0, age,
+      zoom.s, zoom.fx, zoom.fy, CFG.zoomSelector,
+      zoomBase ? zoomBase[0] : 0, zoomBase ? zoomBase[1] : 0])
   await page.screenshot({ path: `${CFG.outDir}/${String(idx).padStart(4, '0')}.png` })
   idx++
 }
@@ -158,10 +185,36 @@ async function hold(p, n, orbit = true) {
   for (let i = 0; i < n; i++) await frame(p[0], p[1], orbit, ripAge())
 }
 
+// 缩放运镜：缓动插值 scale 与焦点，期间指针不动。
+// 焦点是视口坐标；只有 scale=1 时元素坐标才等于视口坐标，点击前务必回到 1。
+async function zoomTo(s, fx, fy, n) {
+  if (!CFG.zoomSelector) return
+  const from = { ...zoom }
+  for (let i = 1; i <= n; i++) {
+    const t = ease(i / n)
+    zoom = {
+      s: from.s + (s - from.s) * t,
+      fx: from.fx + (fx - from.fx) * t,
+      fy: from.fy + (fy - from.fy) * t,
+    }
+    await frame(cur[0], cur[1], true, ripAge())
+  }
+  zoom = { s, fx, fy } // 落回精确目标值，避免浮点漂移挡住 clickAt 的 s===1 检查
+  events.push({ frame: idx, type: 'zoom', s })
+}
+// 短促推近再拉回，强调某区域（数据面板、配图、按钮）
+async function zoomPunch(fx, fy, peak = 1.16, nIn = 20, holdN = 18, nOut = 18) {
+  await zoomTo(peak, fx, fy, nIn)
+  await hold(cur, holdN)
+  await zoomTo(1, W / 2, H / 2, nOut)
+}
+
 // 真实点击的关键：按下 → 停 90ms → 松开，全程不移动指针、不截图。
 // 中途挪指针或拍帧会让不少站点（<a>、筛选 chip、地图行）吞掉这次点击。
 // settle 期间不拍帧：让页面重渲染完，避免白屏/跳帧。
 async function clickAt(p, settle = 0) {
+  // 缩放中元素视觉位置 ≠ 布局坐标，点击必飘；先 zoomTo(1, …) 再点
+  if (zoom.s !== 1) throw new Error('scale≠1 时禁止点击')
   await mouse('mouseMoved', p[0], p[1])
   await mouse('mousePressed', p[0], p[1], { button: 'left', buttons: 1, clickCount: 1 })
   await sleep(90)
@@ -169,6 +222,7 @@ async function clickAt(p, settle = 0) {
     type: 'mouseReleased', x: p[0], y: p[1], button: 'left', buttons: 0, clickCount: 1,
   })
   ripple = { x: p[0], y: p[1], frame: idx }
+  events.push({ frame: idx, type: 'click', at: ripple })
   await frame(p[0], p[1], true, 0)
   if (settle) await sleep(settle)
 }
@@ -227,5 +281,6 @@ const beats = async () => {
 }
 
 await beats()
+fs.writeFileSync('events.json', JSON.stringify(events, null, 1))
 await browser.close()
 console.log(`frames: ${idx}  (${(idx / FPS).toFixed(2)}s)  → ${CFG.outDir}`)

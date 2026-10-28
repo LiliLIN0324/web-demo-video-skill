@@ -10,9 +10,9 @@
 
 ## 开工前必读
 
-1. 先读 `SKILL.md`（完整流程、坑位、声音、相机驱动）。
+1. 先读 `SKILL.md`（完整流程、坑位、声音、缩放运镜、相机驱动）。
 2. 复制 `scripts/record-template.mjs` 到工作目录，改 `CFG` 和末尾「编排」，不要直接改模板。
-3. 产物用 `scripts/encode.mjs` 合成。
+3. 产物用 `scripts/encode.mjs` 合成；配乐用 `scripts/music.mjs` 合成后混流。
 
 ## 不可省略的 8 条
 
@@ -32,12 +32,16 @@
 ```bash
 npm i playwright                       # 唯一安装步骤
 cp scripts/record-template.mjs record.mjs
-# 改 CFG（url / 进入 demo 的按钮 / 隐藏选择器 / 预热 URL）与编排
-node record.mjs                        # → frames/0000.png …
+# 改 CFG（url / 进入 demo 的按钮 / 隐藏选择器 / 预热 URL / zoomSelector）与编排
+node record.mjs                        # → frames/0000.png … + events.json
 node scripts/encode.mjs ./frames ./out.mp4 30
+# 需要配乐：node scripts/music.mjs ./frames ./events.json ./score.wav 30
+# 混流：ffmpeg -i out.mp4 -i score.wav -c:v copy -af loudnorm=I=-15:TP=-1.5:LRA=11 -c:a aac -b:a 160k -shortest final.mp4
 ```
 
-需要声音时，录制阶段把每次点击/打字的帧号写进 `events.json`，后期按 `frame / fps` 对齐；页面用 TTS 的，录制时把 `speechSynthesis.speak` 换成空实现，声音后期合成。
+需要声音时，录制阶段把每次点击/打字的帧号写进 `events.json`，后期按 `frame / fps` 对齐（`music.mjs` 已内置点击 tick 对齐）；页面用 TTS 的，录制时把 `speechSynthesis.speak` 换成空实现，声音后期合成。
+
+需要镜头感时，用模板里的 `zoomTo()` / `zoomPunch()` 对 `CFG.zoomSelector` 指定的宿主元素做缩放运镜；**scale≠1 时不要点击**（视觉坐标 ≠ 布局坐标），`clickAt` 有硬检查。
 
 ## 验收
 
@@ -48,8 +52,9 @@ node scripts/encode.mjs ./frames ./out.mp4 30
 ```
 SKILL.md                      完整指南（必读）
 AGENTS.md                     本文件：通用入口
-scripts/record-template.mjs   录制器模板
+scripts/record-template.mjs   录制器模板（含缩放运镜原语）
 scripts/encode.mjs            帧序列 → mp4
+scripts/music.mjs             合成配乐（events.json 点击对齐）
 assets/                       demo.gif / 分镜 / 成片
 ```
 

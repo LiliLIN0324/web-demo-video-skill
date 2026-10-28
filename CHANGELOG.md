@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0 — 2026-10-28
+
+基于「推鉴 · AI 营销助手（ModelScope Studio）」实战录制，加镜头语言和一键配乐。
+
+- **缩放运镜**：模板新增 `zoomTo()` / `zoomPunch()` 与 `CFG.zoomSelector`——对宿主元素（iframe 内嵌应用就是顶层 `iframe`）逐帧设 `transform: scale()`，缓动插值，不用 CSS transition。开场推近定场、区域强调 punch、结尾拉远收版都能一行写出来。`transform-origin` 用元素未缩放时的 rect 换算；`clickAt` 内置「scale≠1 禁止点击」硬检查。
+- **合成配乐 `scripts/music.mjs`**：纯 node 加法合成写 WAV，126 BPM A 小调（kick/bass/hats/snare/琶音/pad），自动按 `events.json` 的点击帧对齐 tick 确认音；时长 = 帧数 / fps，BPM 可参数化。混流：`ffmpeg -i video.mp4 -i score.wav -c:v copy -af loudnorm=I=-15:TP=-1.5:LRA=11 -c:a aac -b:a 160k -shortest out.mp4`。
+- **模板补写 `events.json`**：此前只有实战脚本在记点击帧，现在模板默认记录点击与运镜事件。
+- **节奏参考**：~60s 片长可覆盖 10+ 页面状态——登录、四步创建向导、侧栏四页快览、历史记录、成品页，glide 20–30 帧、页面停留 20–40 帧。
+- 文档：SKILL.md 新增「缩放运镜」章节，工作流与资源清单同步。
+
 ## 0.0.2 — 2026-10-23
 
 不再只面向 Qoder。
