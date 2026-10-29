@@ -6,7 +6,7 @@
 
 Real cursor movement · real clicks · deterministic frames · optional soundtrack
 
-[![version](https://img.shields.io/badge/version-0.1.0-111111?style=flat-square)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.2.0-111111?style=flat-square)](CHANGELOG.md)
 [![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square)](LICENSE)
 [![node](https://img.shields.io/badge/Node.js-18%2B-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 [![chrome](https://img.shields.io/badge/Chrome-system-4285F4?style=flat-square&logo=googlechrome&logoColor=white)](#requirements)
@@ -47,10 +47,10 @@ A real case: an AI marketing assistant hosted on ModelScope Studio — from logi
 | Runtime | 42 s |
 | Resolution / fps | 1920×1080 / 30fps |
 | Interactions | 16 real clicks, 1 smooth scroll, 10 page states |
-| Zoom camera | opening push-in + 2 punch-ins + closing pull-back |
+| Camera | four real push-ins on panel changes (1.5–1.65×), 1:1 the rest of the time |
 | Host | iframe-embedded app (ms.show), watermark/floating widgets handled |
 | Skeleton / white frames | 0 (route loading cut out) |
-| Audio | fully synthesized score (126 BPM, click-aligned ticks) at -15 LUFS |
+| Audio | score generated per cut (section energy + click/push-in alignment) at -15 LUFS |
 
 ## Features
 
@@ -60,8 +60,9 @@ A real case: an AI marketing assistant hosted on ModelScope Studio — from logi
 | **Clean load cuts** | capture pauses while a route renders its skeleton, so the video cuts straight to the new view |
 | **Iframe-ready** | wrappers like ModelScope Studio: drive the app frame, hide watermark and assistant bubble |
 | **Accurate color** | explicit full→tv + bt709 conversion, so output never looks brighter or more saturated than the page |
-| **Visible cursor** | injected 32px pointer + click ripple with `pointer-events:none` |
-| **Optional audio** | log a frame number per action and align SFX/voice-over in post — even for silent sites |
+| **Camera with intent** | push in (1.5–1.65×) only when a panel appears, a list is filtered or a date is picked; clicks still land while zoomed |
+| **Music per cut** | `music.mjs` ships 4 styles (light/warm/pulse/minimal); section energy follows the camera, clicks get ticks, push-ins get a soft riser |
+| **Toolchain traps solved** | CDP screenshots instead of `page.screenshot()`; camera zeroed for a zoomed click; camera on the outer iframe so WebGL maps keep rendering |
 | **No extra downloads** | system Chrome instead of Chromium; system ffmpeg instead of Playwright's binary |
 | **Clean workspace** | `frames/` is disposable; the workflow deletes it after the cut is rendered |
 
@@ -72,7 +73,7 @@ Requirements: Node.js 18+, Chrome installed, ffmpeg on `PATH` (or set `FFMPEG`).
 ```bash
 npm i playwright
 
-# 1. Copy the template; edit CFG (url, selectors to hide, prewarm endpoints) and the choreography
+# 1. Copy the template; edit CFG (url, frameMatch, selectors/watermark to hide, dsf) and the choreography
 cp scripts/record-template.mjs record.mjs
 node record.mjs                 # → frames/0000.png …
 
@@ -80,11 +81,13 @@ node record.mjs                 # → frames/0000.png …
 node scripts/encode.mjs ./frames ./out.mp4 30
 ```
 
-When you need sound, the recorder logs every click's frame number into `events.json`; align SFX by `frame / fps`, then mux:
+When you need sound, generate a score from the cut itself (`light`/`warm`/`pulse`/`minimal`; section energy follows `mark()`, clicks get ticks), then mux:
 
 ```bash
-ffmpeg -i video.mp4 -i audio.wav -map 0:v -map 1:a \
-  -c:v copy -c:a aac -b:a 192k -shortest -movflags +faststart out.mp4
+scripts/music.mjs            Music generated from the cut: 4 style presets, section energy, click/push-in alignment
+ffmpeg -i out.mp4 -i score.wav -map 0:v -map 1:a -c:v copy \
+  -bsf:v h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0 \
+  -af loudnorm=I=-15:TP=-1.5:LRA=11 -c:a aac -b:a 160k -shortest -movflags +faststart final.mp4
 ```
 
 ## How it works
@@ -93,7 +96,7 @@ ffmpeg -i video.mp4 -i audio.wav -map 0:v -map 1:a \
             CDP input (move / press / release)
  script ───────────────────────────────────▶ real page state
    │                                             │
-   │                                page.screenshot() per frame
+   │                                CDP screenshot per frame
    │                                             ▼
    │                                    frames/0000.png …
    │                                             │
@@ -151,7 +154,7 @@ Restart the session or run `/skills reload`, then invoke `/web-demo-video`.
 SKILL.md                     Full guide: click timing, load cuts, iframes, color, audio, pitfalls
 AGENTS.md                    Universal entry: any agent can start from this file
 CLAUDE.md / GEMINI.md        Pointers to AGENTS.md for agents that only read fixed filenames
-scripts/record-template.mjs  Recorder template: cursor, ripple, 90ms clicks, load cuts, camera
+scripts/record-template.mjs  Recorder template: cursor, ripple, 90ms clicks, load cuts, panel-aware camera, iframe mode
 scripts/encode.mjs           Frames → mp4: locates ffmpeg, fades, bt709/tv
 assets/                      Demo GIF, storyboard, full video
 CHANGELOG.md                 Version history
@@ -169,7 +172,7 @@ CHANGELOG.md                 Version history
 
 ## Version
 
-Current **0.1.0**: camera language and one-command soundtrack — zoom primitives (`zoomTo`/`zoomPunch`, `CFG.zoomSelector`) and a pure-node synthesized score `scripts/music.mjs` (click frames auto-aligned ticks); the template now writes `events.json` by default. 0.0.2 made the skill agent-agnostic (`AGENTS.md`); 0.0.1 fixed click timing, load cuts, iframes, color and headless capture; 0.0.0 was the first release.
+Current **0.2.0**: panel-aware camera and per-cut music — the camera is now translate+scale, pushes in 1.5–1.65× only where a panel changes, and clicks still land while zoomed; the score is generated per cut (4 styles, section energy, click/push-in alignment); three toolchain traps documented and fixed (`page.screenshot()` swallowing clicks, hit-testing under an iframe transform, blank WebGL maps when transforming the app body). 0.1.0 added zoom primitives and a one-command score; 0.0.2 made the skill agent-agnostic; 0.0.1 fixed click timing and color; 0.0.0 was the first release.
 
 See [CHANGELOG.md](CHANGELOG.md).
 

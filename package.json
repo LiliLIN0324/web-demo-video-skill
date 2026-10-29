@@ -1,6 +1,6 @@
 {
   "name": "web-demo-video-skill",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Record web demos as 1080p videos with a visible cursor, real CDP clicks and deterministic frame capture.",

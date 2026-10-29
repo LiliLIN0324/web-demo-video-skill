@@ -6,7 +6,7 @@
 
 真实鼠标轨迹 · 真实点击 · 逐帧可控 · 可选声轨
 
-[![version](https://img.shields.io/badge/version-0.1.0-111111?style=flat-square)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.2.0-111111?style=flat-square)](CHANGELOG.md)
 [![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square)](LICENSE)
 [![node](https://img.shields.io/badge/Node.js-18%2B-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 [![chrome](https://img.shields.io/badge/Chrome-system-4285F4?style=flat-square&logo=googlechrome&logoColor=white)](#依赖)
@@ -47,10 +47,10 @@
 | 成片时长 | 42 秒 |
 | 分辨率 / 帧率 | 1920×1080 / 30fps |
 | 真实操作 | 16 次点击、1 次平滑滚动、10 个页面状态 |
-| 缩放运镜 | 开场推近 + 2 次区域 punch + 结尾拉远 |
+| 镜头 | 4 处面板变化处真实推近（1.5–1.65×），其余 1:1，无小幅抖动 |
 | 宿主环境 | iframe 内嵌应用（ms.show），外层水印/悬浮件已处理 |
 | 白屏 / 骨架屏 | 0 帧（路由加载全部剪掉） |
-| 声轨 | 全合成配乐（126 BPM，点击帧对齐 tick），-15 LUFS |
+| 声轨 | 按画面重新生成的配乐（段落能量 + 点击/推镜对齐），-15 LUFS |
 
 ## 特点
 
@@ -61,10 +61,11 @@
 | **iframe 也能录** | ModelScope Studio 这类外层包装：直接操作 app frame，并隐藏水印与悬浮客服 |
 | **颜色不偏** | 显式 full→tv + bt709，成片不会比网页原图更亮更艳 |
 | **看得见的鼠标** | 注入 32px 指针 + 点击涟漪，`pointer-events:none`，不挡真实点击 |
-| **缩放运镜** | `zoomTo` / `zoomPunch` 对宿主元素逐帧 scale，开场推近、区域强调、结尾拉远 |
-| **一键配乐** | `music.mjs` 纯 node 合成 WAV（kick/bass/琶音/pad），点击帧自动对齐 tick 音 |
+| **镜头有重点** | 只在面板滑出、列表筛选、日期选中时推近（1.5–1.65×），其余保持 1:1；推近后可继续在放大画面里点击 |
+| **配乐按画面生成** | `music.mjs` 4 套风格（light/warm/pulse/minimal），段落能量跟着镜头走，点击帧对齐点击声，推镜前加 0.5s 上行 |
 | **声音可选** | 记录每次操作的帧号，后期对齐音效/人声；页面静音也能做出完整声轨 |
 | **无额外下载** | 系统 Chrome，不下载 Chromium；系统 ffmpeg，不用 Playwright 自带二进制 |
+| **工具链的坑已趟平** | 截图走 CDP 而非 `page.screenshot()`；放大后点击自动归零相机再点；相机挂在 iframe 上，不比页面内部变换导致地图空白 |
 | **出片即清理** | `frames/` 是一次性产物，附清理约定，不会留下几百 MB 截图 |
 
 ## 快速开始
@@ -74,7 +75,7 @@
 ```bash
 npm i playwright
 
-# 1. 复制模板，改 CFG（url、要隐藏的导航、预热接口、zoomSelector）和末尾的编排
+# 1. 复制模板，改 CFG（url、frameMatch、要隐藏的导航/水印、dsf）和末尾的编排
 cp scripts/record-template.mjs record.mjs
 node record.mjs                 # → frames/0000.png … + events.json
 
@@ -82,11 +83,12 @@ node record.mjs                 # → frames/0000.png … + events.json
 node scripts/encode.mjs ./frames ./out.mp4 30
 ```
 
-需要配乐时一条命令（126 BPM A 小调，点击帧自动对齐 tick 音）：
+需要配乐时一条命令（`light`/`warm`/`pulse`/`minimal` 四套风格，段落能量跟着 `mark()` 走，点击帧自动对齐点击声）：
 
 ```bash
-node scripts/music.mjs ./frames ./events.json ./score.wav 30
+node scripts/music.mjs ./frames ./events.json ./score.wav 30 light
 ffmpeg -i out.mp4 -i score.wav -map 0:v -map 1:a -c:v copy \
+  -bsf:v h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0 \
   -af loudnorm=I=-15:TP=-1.5:LRA=11 -c:a aac -b:a 160k -shortest -movflags +faststart final.mp4
 ```
 
@@ -96,7 +98,7 @@ ffmpeg -i out.mp4 -i score.wav -map 0:v -map 1:a -c:v copy \
              CDP 真实输入（移动 / 按下 / 松开）
  脚本编排 ───────────────────────────────▶ 页面真实状态
    │                                          │
-   │                            每帧 page.screenshot()
+   │                            每帧 CDP 截图
    │                                          ▼
    │                                 frames/0000.png …
    │                                          │
@@ -154,9 +156,9 @@ Copy-Item -Recurse web-demo-video-skill "$HOME\.qoder\skills\web-demo-video"
 SKILL.md                     完整操作指南：点击时序、加载剪辑、iframe、颜色、声音、坑位
 AGENTS.md                    通用入口：任何 agent 读这一份就能开工
 CLAUDE.md / GEMINI.md        指向 AGENTS.md（给只认固定文件名的 agent）
-scripts/record-template.mjs  录制器模板：指针、涟漪、90ms 点击、加载切镜、缩放运镜、相机
+scripts/record-template.mjs  录制器模板：指针、涟漪、90ms 点击、加载切镜、按面板推近的相机、iframe 模式
 scripts/encode.mjs           帧序列 → mp4：定位 ffmpeg、淡入淡出、bt709/tv
-scripts/music.mjs            合成配乐：鼓组 + 琶音 + pad，events.json 点击帧对齐 tick
+scripts/music.mjs            按画面生成配乐：4 套模板 + 段落能量 + 点击/推镜对齐
 assets/                      演示 GIF、分镜图、成片
 CHANGELOG.md                 版本记录
 ```
@@ -166,6 +168,9 @@ CHANGELOG.md                 版本记录
 | 现象 | 原因 | 处理 |
 |---|---|---|
 | 点击没反应，按钮却正常 | 按下与松开之间移动了指针或截了图 | 90ms 内不动不拍 |
+| 点击完全到不了应用 | 用了 `page.screenshot()`，点击落到 iframe 元素上 | 改 CDP `Page.captureScreenshot` |
+| 放大后点不中按钮 | iframe transform 下命中测试不稳 | 点击前瞬时归零相机，点完恢复 |
+| 推近后地图空白 | 相机变换了应用内部 `body` | 相机挂到顶层 `iframe` |
 | 筛选 chip 不生效 | 按压时间过长、中间拍帧 | 缩短到约 90ms |
 | 成片里有 1 秒多白屏 | 路由骨架屏被录进去 | 停拍，等目标元素就绪再继续 |
 | 视频比网页更亮更艳 | full→tv 没转、bt709 标签缺失 | 显式 `scale` 转换 + `color_*` |
@@ -173,7 +178,7 @@ CHANGELOG.md                 版本记录
 
 ## 版本
 
-当前 **0.1.0**：镜头语言与一键配乐——新增缩放运镜原语（`zoomTo`/`zoomPunch`，`CFG.zoomSelector`）与纯 node 合成配乐 `scripts/music.mjs`（点击帧对齐 tick），模板默认写 `events.json`。上一版 0.0.2 通用化（`AGENTS.md`），0.0.1 修正点击时序、加载切镜、iframe、颜色与无头录制；0.0.0 为首版。
+当前 **0.2.0**：镜头重写与配乐模板化——相机改成「缩放 + 平移」，只在面板变化处推近 1.5–1.65×，并支持放大状态下继续点击；配乐改为按画面重新生成（4 套风格 + 段落能量 + 点击/推镜对齐）；记录并修复了三个工具链坑（`page.screenshot()` 吃掉点击、iframe transform 下命中漂移、变换 body 导致地图空白）。上一版 0.1.0 加镜头原语与一键配乐，0.0.2 通用化，0.0.1 修正点击时序与颜色，0.0.0 为首版。
 
 完整改动见 [CHANGELOG.md](CHANGELOG.md)。
 
