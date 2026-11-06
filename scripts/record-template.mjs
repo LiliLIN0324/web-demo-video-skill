@@ -307,8 +307,25 @@ async function clickAt(p, settle = 0) {
 }
 
 // 坐标现测（状态一变布局会位移）
+// 但测量必须避开相机：transform 挂着时 getBoundingClientRect 返回的是**变换后**的坐标，
+// 而 glide / clickAt 全按页面坐标工作（内部再 mapPt）。混用会点到画外的空白处——
+// 实测在 1.7 下量发送按钮得到 x=1692，点击落空、回答根本没出来，画面却一切"正常"。
+async function measurePage(fn, arg) {
+  const zoomed = cam.s !== 1 || cam.tx !== 0 || cam.ty !== 0
+  if (zoomed) {
+    await applyCam(1, 0, 0)
+    await sleep(50)
+  }
+  const out = await evalApp(fn, arg)
+  if (zoomed) {
+    await applyCam(cam.s, cam.tx, cam.ty)
+    await sleep(50)
+  }
+  return out
+}
+
 const center = async (sel) => {
-  const p = await evalApp((s) => {
+  const p = await measurePage((s) => {
     const el = document.querySelector(s)
     if (!el) return null
     const r = el.getBoundingClientRect()
@@ -319,7 +336,7 @@ const center = async (sel) => {
   return p
 }
 const centerByText = async (text, { exact = true, scope = 'a,button,[role=button]' } = {}) => {
-  const p = await evalApp(([t, ex, sc]) => {
+  const p = await measurePage(([t, ex, sc]) => {
     const cand = []
     for (const el of document.querySelectorAll(sc)) {
       const s = (el.innerText || '').trim()
