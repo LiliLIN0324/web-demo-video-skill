@@ -19,12 +19,31 @@ if (!dirArg || !evArg || !outArg) {
   process.exit(1)
 }
 const fps = Number(fpsArg || 30)
+if (!Number.isFinite(fps) || fps <= 0) {
+  console.error(`fps 不是一个正数: ${fpsArg}`)
+  process.exit(1)
+}
 const styleName = styleArg || 'light'
+if (!fs.existsSync(dirArg) || !fs.statSync(dirArg).isDirectory()) {
+  console.error(`帧目录不存在或不是目录: ${dirArg}`)
+  console.error('参数顺序是 <framesDir> <events.json> <out.wav> [fps] [style]，别把 events.json 写到第一位。')
+  process.exit(1)
+}
 const frames = fs.readdirSync(dirArg).filter((f) => /^\d+\.png$/i.test(f)).length
-if (!frames) { console.error(`帧目录为空: ${dirArg}`); process.exit(1) }
-const events = fs.existsSync(evArg)
-  ? JSON.parse(fs.readFileSync(evArg, 'utf8').replace(/^\uFEFF/, ''))
-  : []
+if (!frames) { console.error(`帧目录里没有 0000.png 这类帧: ${dirArg}`); process.exit(1) }
+if (!fs.existsSync(evArg)) {
+  console.error(`events.json 不存在: ${evArg} —— 只会出一段没有点击/推镜对齐、段落能量平铺的伴奏。先跑录制再配乐。`)
+}
+let events = []
+if (fs.existsSync(evArg)) {
+  try {
+    events = JSON.parse(fs.readFileSync(evArg, 'utf8').replace(/^\uFEFF/, ''))
+  } catch (e) {
+    console.error(`events.json 解析失败: ${evArg} —— ${e.message}`)
+    console.error('录制被强行打断时可能留下半截 JSON；重跑录制，或手工把最后一条补完整。')
+    process.exit(1)
+  }
+}
 const dur = frames / fps
 const SR = 44100
 const N = Math.ceil(dur * SR)
@@ -103,7 +122,13 @@ const PRESETS = {
     energy: { open: 0.12, card: 0.32, panel: 0.45, detail: 0.22, venue: 0.34, finder: 0.4, calendar: 0.3, outro: 0.14 },
   },
 }
-const P = PRESETS[styleName] || PRESETS.light
+// 写错风格名不当「默默用 light」处理：整段配器都会不一样，静默兜底只会在出片后才发现不对
+const P = PRESETS[styleName]
+if (!P) {
+  console.error(`没有这个配乐模板: ${styleName}`)
+  console.error('可选: ' + Object.keys(PRESETS).join(' | ') + '（说明见本文件顶部与 SKILL.md 的表）')
+  process.exit(1)
+}
 console.log(`style=${styleName}  ${P.bpm} BPM  ${frames} 帧 = ${dur.toFixed(2)}s  ${events.filter((e) => e.type === 'click').length} 次点击`)
 
 // ---------- 确定性随机（同输入 → 同结果，便于复现） ----------

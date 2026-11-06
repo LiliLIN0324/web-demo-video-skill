@@ -1,0 +1,16 @@
+# 脚本与文档一律 LF：Windows 上 core.autocrlf=true 会把工作区换成 CRLF，
+# 模板里的正则、给 cmd 传的参数、以及 git diff 都会跟着抖。这里钉死。
+* text=auto eol=lf
+
+*.mjs   text eol=lf
+*.js    text eol=lf
+*.md    text eol=lf
+*.json  text eol=lf
+
+# 素材不做换行转换
+*.png binary
+*.jpg binary
+*.gif binary
+*.mp4 binary
+*.wav binary
+*.rev binary

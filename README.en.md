@@ -1,12 +1,12 @@
 <div align="center">
 
-# 演录 · web-demo-video
+# Demo Reel · web-demo-video
 
 **Turn any web demo into a 1080p video people will actually watch**
 
 Real cursor movement · real clicks · deterministic frames · optional soundtrack
 
-[![version](https://img.shields.io/badge/version-0.2.0-111111?style=flat-square)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.2.1-111111?style=flat-square)](CHANGELOG.md)
 [![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square)](LICENSE)
 [![node](https://img.shields.io/badge/Node.js-18%2B-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 [![chrome](https://img.shields.io/badge/Chrome-system-4285F4?style=flat-square&logo=googlechrome&logoColor=white)](#requirements)
@@ -65,6 +65,7 @@ A real case: an AI marketing assistant hosted on ModelScope Studio — from logi
 | **Toolchain traps solved** | CDP screenshots instead of `page.screenshot()`; camera zeroed for a zoomed click; camera on the outer iframe so WebGL maps keep rendering |
 | **No extra downloads** | system Chrome instead of Chromium; system ffmpeg instead of Playwright's binary |
 | **Clean workspace** | `frames/` is disposable; the workflow deletes it after the cut is rendered |
+| **Verified before shipping** | `verify.mjs`: resolution, colour tags, frame count, faststart, pixel diff against the source PNGs, loudness — PASS/FAIL plus a keyframe montage |
 
 ## Quick start
 
@@ -75,19 +76,23 @@ npm i playwright
 
 # 1. Copy the template; edit CFG (url, frameMatch, selectors/watermark to hide, dsf) and the choreography
 cp scripts/record-template.mjs record.mjs
-node record.mjs                 # → frames/0000.png …
+node record.mjs                 # → frames/0000.png … + events.json
 
-# 2. Encode (locates ffmpeg, applies bt709/tv and fades)
+# 2. Encode (locates ffmpeg, downscales 4K frames to 1080p, applies bt709/tv and fades)
 node scripts/encode.mjs ./frames ./out.mp4 30
 ```
 
-When you need sound, generate a score from the cut itself (`light`/`warm`/`pulse`/`minimal`; section energy follows `mark()`, clicks get ticks), then mux:
+When you need sound, generate a score from the cut itself (`light`/`warm`/`pulse`/`minimal`; section energy follows `mark()`, clicks get ticks), then encode again with `--audio`:
 
 ```bash
-scripts/music.mjs            Music generated from the cut: 4 style presets, section energy, click/push-in alignment
-ffmpeg -i out.mp4 -i score.wav -map 0:v -map 1:a -c:v copy \
-  -bsf:v h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0 \
-  -af loudnorm=I=-15:TP=-1.5:LRA=11 -c:a aac -b:a 160k -shortest -movflags +faststart final.mp4
+node scripts/music.mjs ./frames ./events.json ./score.wav 30 light
+node scripts/encode.mjs ./frames ./final.mp4 30 --audio ./score.wav
+```
+
+Before shipping, verify the cut — one PASS/FAIL table plus a keyframe montage (exits non-zero on any FAIL, so it works as a release gate):
+
+```bash
+node scripts/verify.mjs ./frames ./final.mp4 --events ./events.json
 ```
 
 ## How it works
@@ -155,7 +160,10 @@ SKILL.md                     Full guide: click timing, load cuts, iframes, color
 AGENTS.md                    Universal entry: any agent can start from this file
 CLAUDE.md / GEMINI.md        Pointers to AGENTS.md for agents that only read fixed filenames
 scripts/record-template.mjs  Recorder template: cursor, ripple, 90ms clicks, load cuts, panel-aware camera, iframe mode
-scripts/encode.mjs           Frames → mp4: locates ffmpeg, fades, bt709/tv
+scripts/encode.mjs           Frames → mp4: locates ffmpeg, downscales 4K, fades, bt709/tv, --audio mux
+scripts/verify.mjs           Pre-ship gate: PASS/FAIL table + keyframe montage
+scripts/ffmpeg.mjs           ffmpeg / ffprobe discovery (env var → PATH → common install dirs)
+scripts/music.mjs            Score generated from the cut: 4 style presets, section energy, click/push-in alignment
 assets/                      Demo GIF, storyboard, full video
 CHANGELOG.md                 Version history
 ```
@@ -167,12 +175,27 @@ CHANGELOG.md                 Version history
 | Clicks do nothing, buttons work | pointer moved or a frame was captured between press and release | keep it still for 90ms |
 | Filter chip never applies | press held too long, screenshot in the middle | shorten to ~90ms |
 | A second of white in the cut | route skeleton was captured | pause, wait for the target element |
-| Video looks brighter / more saturated | missing full→tv conversion and bt709 tags | explicit `scale` + `color_*` |
+| Video looks brighter / more saturated | missing full→tv conversion and bt709 tags | explicit `scale` + `color_*`, plus `-x264-params` so the bitstream VUI is tagged too |
+| `dsf = 2` but frames are still 1920×1080 | `deviceScaleFactor` does nothing to CDP screenshots | use `clip.scale` in `Page.captureScreenshot` (template already does) |
 | Browser disappears mid-run | headful window closed by the user | `headless: true` |
+
+## Stack & dependencies
+
+| Layer | What | Why |
+|---|---|---|
+| Page | Playwright + system Chrome (`channel: 'chrome'`) | no Chromium download; `page.screenshot()` resizes the viewport and swallows clicks |
+| Frames | CDP `Page.captureScreenshot` (`captureBeyondViewport:false`, `clip.scale` sets resolution) | viewport stays put, frames are evenly spaced; only `clip.scale` produces 4K |
+| Input | CDP `Input.dispatchMouseEvent` (press → 90ms → release) | the page's own hover, filters and routing fire for real |
+| Cursor | injected DOM cursor on the untransformed layer | system cursors aren't captured; outer layer keeps it sharp when zoomed |
+| Audio | additive synthesis written straight to WAV in Node (`music.mjs`) | no sample packs; the score is arranged from `events.json` frame numbers |
+| Encode | system ffmpeg (`FFMPEG` → PATH → common install dirs) | no hardcoded machine paths; ffmpeg 8 removed `-vsync`, so the command doesn't rely on it |
+| Verify | `ffprobe` + `blend=difference` + `signalstats` | judge pixels, not tags; PSNR is only a "wrong frame" sentinel |
+
+Only requirements: Node.js 18+ and `npm i playwright`. Chrome and ffmpeg come from the machine.
 
 ## Version
 
-Current **0.2.0**: panel-aware camera and per-cut music — the camera is now translate+scale, pushes in 1.5–1.65× only where a panel changes, and clicks still land while zoomed; the score is generated per cut (4 styles, section energy, click/push-in alignment); three toolchain traps documented and fixed (`page.screenshot()` swallowing clicks, hit-testing under an iframe transform, blank WebGL maps when transforming the app body). 0.1.0 added zoom primitives and a one-command score; 0.0.2 made the skill agent-agnostic; 0.0.1 fixed click timing and color; 0.0.0 was the first release.
+Current **0.2.1**: two failure modes made impossible rather than documented — 4K frames are downscaled to 1080p by `encode.mjs` itself (no more hand-written `-vf`), and ffmpeg discovery no longer depends on one machine's paths. Added `verify.mjs` (resolution / colour / frame count / faststart / pixel diff / loudness PASS-FAIL + keyframe montage) and `--audio`, which muxes in the same encode pass with two-pass loudnorm (measured −14.8 LUFS). `events.json` is now flushed per event, so a crash keeps everything recorded so far. Also fixed a fake switch: `CFG.dsf` used to set only `deviceScaleFactor`, which has no effect on CDP screenshots. 0.2.0 introduced the panel-aware camera and per-cut music; 0.1.0 added zoom primitives and a one-command score; 0.0.2 made the skill agent-agnostic; 0.0.1 fixed click timing and color; 0.0.0 was the first release.
 
 See [CHANGELOG.md](CHANGELOG.md).
 

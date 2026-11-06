@@ -6,7 +6,7 @@
 
 真实鼠标轨迹 · 真实点击 · 逐帧可控 · 可选声轨
 
-[![version](https://img.shields.io/badge/version-0.2.0-111111?style=flat-square)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.2.1-111111?style=flat-square)](CHANGELOG.md)
 [![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square)](LICENSE)
 [![node](https://img.shields.io/badge/Node.js-18%2B-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 [![chrome](https://img.shields.io/badge/Chrome-system-4285F4?style=flat-square&logo=googlechrome&logoColor=white)](#依赖)
@@ -65,6 +65,7 @@
 | **配乐按画面生成** | `music.mjs` 4 套风格（light/warm/pulse/minimal），段落能量跟着镜头走，点击帧对齐点击声，推镜前加 0.5s 上行 |
 | **声音可选** | 记录每次操作的帧号，后期对齐音效/人声；页面静音也能做出完整声轨 |
 | **无额外下载** | 系统 Chrome，不下载 Chromium；系统 ffmpeg，不用 Playwright 自带二进制 |
+| **出片有验收** | `verify.mjs` 一屏 PASS/FAIL：分辨率、色彩标签、帧数、faststart、与源图色差、响度，外加关键帧拼图；有问题返回非 0 |
 | **工具链的坑已趟平** | 截图走 CDP 而非 `page.screenshot()`；放大后点击自动归零相机再点；相机挂在 iframe 上，不比页面内部变换导致地图空白 |
 | **出片即清理** | `frames/` 是一次性产物，附清理约定，不会留下几百 MB 截图 |
 
@@ -79,17 +80,21 @@ npm i playwright
 cp scripts/record-template.mjs record.mjs
 node record.mjs                 # → frames/0000.png … + events.json
 
-# 2. 合成（自动定位 ffmpeg，做 bt709/tv 转换与首尾淡入淡出）
+# 2. 合成（自动定位 ffmpeg，4K 帧自动降回 1080p，bt709/tv，首尾淡入淡出）
 node scripts/encode.mjs ./frames ./out.mp4 30
 ```
 
-需要配乐时一条命令（`light`/`warm`/`pulse`/`minimal` 四套风格，段落能量跟着 `mark()` 走，点击帧自动对齐点击声）：
+需要配乐时，再生成音轨并重跑一次合成带上 `--audio`（`light`/`warm`/`pulse`/`minimal` 四套风格，段落能量跟着 `mark()` 走，点击帧自动对齐点击声）：
 
 ```bash
 node scripts/music.mjs ./frames ./events.json ./score.wav 30 light
-ffmpeg -i out.mp4 -i score.wav -map 0:v -map 1:a -c:v copy \
-  -bsf:v h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0 \
-  -af loudnorm=I=-15:TP=-1.5:LRA=11 -c:a aac -b:a 160k -shortest -movflags +faststart final.mp4
+node scripts/encode.mjs ./frames ./final.mp4 30 --audio ./score.wav
+```
+
+出片前验收，一张 PASS/FAIL 表 + 关键帧拼图（有 FAIL 就返回非 0，可以直接当发布门禁）：
+
+```bash
+node scripts/verify.mjs ./frames ./final.mp4 --events ./events.json
 ```
 
 ## 工作方式
@@ -157,7 +162,9 @@ SKILL.md                     完整操作指南：点击时序、加载剪辑、
 AGENTS.md                    通用入口：任何 agent 读这一份就能开工
 CLAUDE.md / GEMINI.md        指向 AGENTS.md（给只认固定文件名的 agent）
 scripts/record-template.mjs  录制器模板：指针、涟漪、90ms 点击、加载切镜、按面板推近的相机、iframe 模式
-scripts/encode.mjs           帧序列 → mp4：定位 ffmpeg、淡入淡出、bt709/tv
+scripts/encode.mjs           帧序列 → mp4：定位 ffmpeg、4K 自动降 1080p、淡入淡出、bt709/tv、--audio 混轨
+scripts/verify.mjs           出片前验收：PASS/FAIL 表 + 关键帧拼图
+scripts/ffmpeg.mjs           ffmpeg / ffprobe 定位（环境变量 → PATH → 常见安装位置）
 scripts/music.mjs            按画面生成配乐：4 套模板 + 段落能量 + 点击/推镜对齐
 assets/                      演示 GIF、分镜图、成片
 CHANGELOG.md                 版本记录
@@ -173,12 +180,27 @@ CHANGELOG.md                 版本记录
 | 推近后地图空白 | 相机变换了应用内部 `body` | 相机挂到顶层 `iframe` |
 | 筛选 chip 不生效 | 按压时间过长、中间拍帧 | 缩短到约 90ms |
 | 成片里有 1 秒多白屏 | 路由骨架屏被录进去 | 停拍，等目标元素就绪再继续 |
-| 视频比网页更亮更艳 | full→tv 没转、bt709 标签缺失 | 显式 `scale` 转换 + `color_*` |
+| 视频比网页更亮更艳 | full→tv 没转、bt709 标签缺失 | 显式 `scale` 转换 + `color_*`，再加 `-x264-params` 写进码流 VUI |
+| 设了 `dsf = 2` 帧还是 1920×1080 | `deviceScaleFactor` 对 CDP 截图不起作用 | 用 `Page.captureScreenshot` 的 `clip.scale`（模板已改） |
 | 录制中途浏览器消失 | 无头模式关闭、窗口被人关掉 | `headless: true` |
+
+## 技术栈与依赖
+
+| 层 | 用什么 | 为什么 |
+|---|---|---|
+| 开页面 | Playwright + 系统 Chrome（`channel: 'chrome'`） | 不下载 Chromium；`page.screenshot()` 会改视口把点击吃掉，所以只用它开页面 |
+| 拍帧 | CDP `Page.captureScreenshot`（`captureBeyondViewport:false`，`clip.scale` 控制分辨率） | 视口不动，逐帧 30fps 均匀；`dsf=2` 只能靠 `clip.scale`，`deviceScaleFactor` 对 CDP 截图不起作用 |
+| 真点击 | CDP `Input.dispatchMouseEvent`（按下 → 90ms → 松开） | 页面自己的 hover / 筛选 / 跳转照常工作 |
+| 指针 | 注入的 DOM 光标，挂在不被变换的那一层 | 系统光标进不了截图；挂外层保证推近时光标仍锐利 |
+| 声音 | 纯 Node 写 WAV 的加性合成（`music.mjs`） | 不引第三方音色；按 `events.json` 的帧号排能量与点击，声音对得上画面 |
+| 合成 | 系统 ffmpeg（`FFMPEG` → PATH → 常见安装位置） | 不锁某台机器的绝对路径；ffmpeg 8 删了 `-vsync`，命令里不再依赖它 |
+| 验收 | `ffprobe` + `blend=difference` + `signalstats` | 看像素而不是看标签；PSNR 只当"没拿错帧"的哨兵 |
+
+依赖只有 Node 18+ 与 `npm i playwright`；Chrome、ffmpeg 用本机已装的。
 
 ## 版本
 
-当前 **0.2.0**：镜头重写与配乐模板化——相机改成「缩放 + 平移」，只在面板变化处推近 1.5–1.65×，并支持放大状态下继续点击；配乐改为按画面重新生成（4 套风格 + 段落能量 + 点击/推镜对齐）；记录并修复了三个工具链坑（`page.screenshot()` 吃掉点击、iframe transform 下命中漂移、变换 body 导致地图空白）。上一版 0.1.0 加镜头原语与一键配乐，0.0.2 通用化，0.0.1 修正点击时序与颜色，0.0.0 为首版。
+当前 **0.2.1**：把两处会毁掉成片的坑做实——4K 帧由 `encode.mjs` 自动降回 1080p（不再靠手加 `-vf`），ffmpeg 定位不再依赖某台机器的路径；新增 `verify.mjs`（分辨率 / 色彩 / 帧数 / faststart / 色差 / 响度 PASS/FAIL + 关键帧拼图）与 `--audio` 一次混轨（两趟 `loudnorm`，实测 -14.8 LUFS）；`events.json` 改为增量落盘，录制中途崩溃也保得住已录部分。同时修了一个假开关：`CFG.dsf` 以前只设 `deviceScaleFactor`，对 CDP 截图根本无效。上一版 0.2.0 重写镜头（按面板推近）与配乐模板化，0.1.0 加镜头原语与一键配乐，0.0.2 通用化，0.0.1 修正点击时序与颜色，0.0.0 为首版。
 
 完整改动见 [CHANGELOG.md](CHANGELOG.md)。
 

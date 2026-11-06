@@ -3,3 +3,7 @@ frames/
 work/
 *.log
 out.mp4
+package-lock.json
+final.mp4
+score.wav
+verify-sheet.png

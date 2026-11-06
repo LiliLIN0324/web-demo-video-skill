@@ -11,6 +11,7 @@
 //     iframe 内嵌应用就把相机挂在顶层 iframe 上。
 import { chromium } from 'playwright'
 import fs from 'node:fs'
+import path from 'node:path'
 
 const CFG = {
   url: 'https://example.com/#/demo',
@@ -18,7 +19,8 @@ const CFG = {
   width: 1920,
   height: 1080,
   fps: 30,
-  // 2 = 双倍渲染（3840×2160），放大时文字仍然干净，成片再缩回 1080p；1 = 常规
+  // 2 = 双倍渲染（3840×2160），放大时文字仍然干净，encode.mjs 会自动缩回 1080p；1 = 常规
+  // 生效的是下面 capture() 里的 clip.scale，不是 deviceScaleFactor——后者对 CDP 截图没用
   dsf: 2,
 
   // 应用在 iframe 里（ModelScope Studio、CodePen 预览、嵌入式 demo）时填匹配串，
@@ -29,8 +31,11 @@ const CFG = {
   hideSelectors: ['header', '[role="banner"]'],
   extraCss: '',
 
-  // 指针入场/离场停在画外
-  park: [2010, 1180],
+  // 指针入场/离场停在画外。留 null 就按 width/height 自动推（横屏竖屏都不用改）
+  park: null,
+
+  // 帧文件名的位数：0000.png…（4 位够用 9999 帧 = 30fps 下 5.5 分钟）
+  pad: 4,
 
   // 无头模式：不弹窗、不抢焦点，避免录制中途被人关掉
   headless: true,
@@ -39,9 +44,22 @@ const CFG = {
 const W = CFG.width
 const H = CFG.height
 const FPS = CFG.fps
+const PAD = CFG.pad
+const PARK = CFG.park ?? [W + 90, H + 40]
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-fs.rmSync(CFG.outDir, { recursive: true, force: true })
+// 帧目录只装帧。里面有别的东西（上次留下的参考图、别人的 mp3）就不清目录、直接停手——
+// 这是个会整目录删空的脚本，宁可让人先移走。
+const FRAME_RE = /^\d+\.png$/i
+if (fs.existsSync(CFG.outDir)) {
+  const others = fs.readdirSync(CFG.outDir).filter((f) => !FRAME_RE.test(f))
+  if (others.length) {
+    console.error(`${CFG.outDir} 里不只有帧，还有：${others.slice(0, 5).join(', ')}${others.length > 5 ? ' …' : ''}`)
+    console.error('这个脚本会把该目录整目录清空后重录。换个 CFG.outDir，或先把这些文件移走。')
+    process.exit(1)
+  }
+  fs.rmSync(CFG.outDir, { recursive: true, force: true })
+}
 fs.mkdirSync(CFG.outDir, { recursive: true })
 
 const browser = await chromium.launch({ channel: 'chrome', headless: CFG.headless })
@@ -124,6 +142,10 @@ const cdp = await ctx.newCDPSession(page)
 const capture = async (file) => {
   const { data } = await cdp.send('Page.captureScreenshot', {
     format: 'png',
+    // dsf 只能靠这里的 clip.scale：deviceScaleFactor 对 CDP 截图没有作用
+    // （实测 ctxDsf=1/2 不带 clip 都是 1920×1080，带 clip scale=2 才出 3840×2160）。
+    // clip 用的是 CSS 像素，所以注入的光标在放大后依然是同样粗细的矢量。
+    clip: { x: 0, y: 0, width: W, height: H, scale: CFG.dsf },
     captureBeyondViewport: false, // 关键：不要捕获视口外，否则会改视口
     fromSurface: true,
   })
@@ -134,10 +156,21 @@ const mouse = (type, x, y, extra = {}) =>
 
 let idx = 0
 let ripple = null
-let cur = [...CFG.park]                 // 指针的页面坐标
+let cur = [...PARK]                 // 指针的页面坐标
 let cam = { s: 1, tx: 0, ty: 0 }        // 相机：translate(tx,ty) scale(s)
 let lastMouse = [-1, -1]
 const events = []
+// events.json 边录边写：录制跑到一半崩了（页面报错、Chrome 被关、Ctrl+C）也留得下已经发生过的事件，
+// 不然配乐只能重录整片。
+const EVENTS_FILE = path.join(path.dirname(path.resolve(CFG.outDir)), 'events.json')
+const flushEvents = () => {
+  try { fs.writeFileSync(EVENTS_FILE, JSON.stringify(events, null, 1)) } catch (e) { console.error('events.json 写不下去：' + e.message) }
+}
+const pushEvent = (e) => { events.push(e); flushEvents() }
+process.on('exit', flushEvents)
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, () => { flushEvents(); console.error(`\n收到 ${sig}：已把 events.json 落盘（${events.length} 条、${idx} 帧），退出`); process.exit(130) })
+}
 
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
 const ripAge = () => (ripple ? idx - ripple.frame : -1)
@@ -197,7 +230,11 @@ async function frame(x, y, age = -1) {
       el.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`
     }
   }, [vx, vy, rx, ry, age, inFrame ? 'iframe' : 'body', cam.s, cam.tx, cam.ty])
-  await capture(`${CFG.outDir}/${String(idx).padStart(4, '0')}.png`)
+  if (idx >= 10 ** PAD) {
+    console.error(`帧号已经超过 ${PAD} 位（第 ${idx} 帧）。把 CFG.pad 调大（比如 5），否则文件名会溢出成 5 位、encode 的 %0${PAD}d 会在第 ${10 ** PAD} 帧停下，成片莫名变短。`)
+    process.exit(1)
+  }
+  await capture(`${CFG.outDir}/${String(idx).padStart(PAD, '0')}.png`)
   idx++
 }
 
@@ -223,7 +260,7 @@ async function camTo(target, n) {
     await frame(cur[0], cur[1], ripAge())
   }
   cam = { ...target }
-  events.push({ frame: idx, type: 'cam', s: cam.s })
+  pushEvent({ frame: idx, type: 'cam', s: cam.s })
 }
 // 镜头 + 指针同时动：推近某个面板时，指针顺势落到面板上
 async function camGlide(target, to, n) {
@@ -240,7 +277,7 @@ async function camGlide(target, to, n) {
   }
   cam = { ...target }
   cur = [...to]
-  events.push({ frame: idx, type: 'cam', s: cam.s })
+  pushEvent({ frame: idx, type: 'cam', s: cam.s })
 }
 
 // 真实点击：按下 → 停 90ms → 松开，全程不移动指针、不截图。
@@ -259,7 +296,7 @@ async function clickAt(p, settle = 0) {
   await sleep(90)
   await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1 })
   ripple = { x: p[0], y: p[1], frame: idx }
-  events.push({ frame: idx, type: 'click', at: { x, y } })
+  pushEvent({ frame: idx, type: 'click', at: { x, y } })
   if (zoomed) {
     await applyCam(cam.s, cam.tx, cam.ty)
     await sleep(180) // 给合成器一帧时间重新栅格化
@@ -317,15 +354,15 @@ const waitFor = async (sel, ms = 20000) => {
 // 切镜：相机复位、指针移到画外，这一帧不拍
 const cut = async () => {
   cam = { s: 1, tx: 0, ty: 0 }
-  cur = [...CFG.park]
+  cur = [...PARK]
   ripple = null
   lastMouse = [-1, -1]
   await applyCam(1, 0, 0)
-  await mouse('mouseMoved', CFG.park[0], CFG.park[1])
+  await mouse('mouseMoved', PARK[0], PARK[1])
 }
 // 段落标记：配乐按它决定每段能量
 const mark = (name) => {
-  events.push({ frame: idx, type: 'beat', name })
+  pushEvent({ frame: idx, type: 'beat', name })
   console.log(`  [mark] ${name} @ ${(idx / FPS).toFixed(1)}s`)
 }
 
@@ -366,6 +403,6 @@ const beats = async () => {
 }
 
 await beats()
-fs.writeFileSync('events.json', JSON.stringify(events, null, 1))
+flushEvents()
 await browser.close()
 console.log(`frames: ${idx}  (${(idx / FPS).toFixed(2)}s)  → ${CFG.outDir}`)

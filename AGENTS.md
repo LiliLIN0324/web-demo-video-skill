@@ -14,7 +14,7 @@
 2. 复制 `scripts/record-template.mjs` 到工作目录，改 `CFG` 和末尾「编排」，不要直接改模板。
 3. 产物用 `scripts/encode.mjs` 合成；配乐用 `scripts/music.mjs`（带 4 套风格模板）生成后混流。
 
-## 不可省略的 10 条
+## 不可省略的 11 条
 
 违反任意一条，成片就会出问题：
 
@@ -27,39 +27,39 @@
 7. **每次点击前重新量坐标**，状态一变布局会位移。
 8. **镜头只在变化处推近，幅度 1.4–1.7**：面板滑出、列表筛选、日期选中时 `camGlide(camFor(面板中心, 1.6), 面板内一点, 26)`；**不要做 1.05–1.25 的缩放**。放大状态下点击，`clickAt` 会自动把变换瞬时归零再点。
 9. **相机挂在顶层 `iframe` 上，不要变换应用内部的 `body`** —— 后者会让 WebGL 地图掉瓦片。
-10. **合成时显式 `scale=in_range=full:out_range=tv:in_color_matrix=bt709:out_color_matrix=bt709` + `color_*` 标签**，否则 H.264 比网页原图更亮更艳。
+10. **合成时显式 `scale=in_range=full:out_range=tv:…bt709` + `color_*` 标签，并且再补 `-x264-params "colorprim=bt709:transfer=bt709:colormatrix=bt709"`** —— 只给 `color_*` 时容器是 bt709 但码流 VUI 仍是 `unknown`，播放器按自己的默认解释，成片仍会偏亮偏艳。`encode.mjs` 两条一起发。
+11. **出片先跑 `scripts/verify.mjs`** —— 它会打印 PASS/FAIL 表并把关键帧拼成一张图；有 FAIL 返回非 0。别只看"文件生成了、能播放"。
 
 ## 流程
 
 ```bash
 npm i playwright                       # 唯一安装步骤
 cp scripts/record-template.mjs record.mjs
-# 改 CFG（url / frameMatch / hideSelectors / dsf）与编排（glide / clickAt / camGlide / mark）
-node record.mjs                        # → frames/0000.png … + events.json
+# 改 CFG（url / frameMatch / hideSelectors / dsf / park / pad）与末尾编排（glide / clickAt / camGlide / mark）
+node record.mjs                        # → frames/0000.png … + events.json（每个事件即时落盘，崩了也留得住）
 node scripts/encode.mjs ./frames ./out.mp4 30
 node scripts/music.mjs ./frames ./events.json ./score.wav 30 light
-ffmpeg -i out.mp4 -i score.wav -map 0:v -map 1:a -c:v copy \
-  -bsf:v h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0 \
-  -af loudnorm=I=-15:TP=-1.5:LRA=11 -c:a aac -b:a 160k -shortest -movflags +faststart final.mp4
+node scripts/encode.mjs ./frames ./final.mp4 30 --audio ./score.wav   # 一次做完画面 + 两趟响度归一 + 混轨
+node scripts/verify.mjs ./frames ./final.mp4 --events ./events.json    # PASS/FAIL 表 + 关键帧拼图
 ```
 
 配乐不是固定 loop：`mark('panel')` 这类段落标记决定每段能量，`click` 对齐点击声，`cam` 在推近前加 0.5s 极轻上行。风格：`light` / `warm` / `pulse` / `minimal`。
 
-需要 4K 超采样（放大不糊）：`CFG.dsf = 2`，编码时 `-vf "scale=1920:1080:flags=lanczos,..."`。
-
-需要页面原声时，录制阶段把点击/打字帧号写进 `events.json`，后期对齐；页面用 TTS 的，录制时把 `speechSynthesis.speak` 换成空实现。
+需要 4K 超采样（放大不糊）：`CFG.dsf = 2`，`encode.mjs` 自动 `scale=1920:1080:flags=lanczos` 降回。**`dsf` 生效的是 `Page.captureScreenshot` 的 `clip.scale`**——`newContext({deviceScaleFactor})` 对 CDP 截图不起作用（实测设 2 仍出 1920×1080），别只改那一个。
 
 ## 验收
 
-抽帧拼图看点击瞬间、推近落点、状态切换、结尾；`ffprobe` 确认 `yuv420p(tv, bt709)`；音频响度 −17 ~ −15 LUFS，峰值不过 0 dBFS。中间产物（`frames/`）出片后删除。
+`node scripts/verify.mjs ./frames ./final.mp4 --events ./events.json` 一屏看完：分辨率（按源帧比例推）、色彩标签（容器 + 码流）、帧数、时长、faststart（真去字节里看 `moov` 在 `mdat` 前）、码率、与源 PNG 的平均 YUV 差（≤2/255）、最差帧 PSNR（≥22 dB 的哨兵）、响度（−19 ~ −14 LUFS）。再肉眼扫一遍拼图：点击瞬间、推近落点、状态切换、结尾。中间产物（`frames/`）出片后删除。
 
 ## 文件
 
 ```
 SKILL.md                      完整指南（必读）
 AGENTS.md                     本文件：通用入口
-scripts/record-template.mjs   录制器模板（指针、相机、点击穿透、CDP 截图）
-scripts/encode.mjs            帧序列 → mp4
+scripts/record-template.mjs   录制器模板（指针、相机、点击、CDP 截图带 clip.scale、events.json 增量落盘）
+scripts/encode.mjs            帧序列 → mp4（4K 自动降 1080p、bt709 容器+VUI、--audio 混轨）
+scripts/verify.mjs            出片前的 PASS/FAIL 表 + 关键帧拼图
+scripts/ffmpeg.mjs            ffmpeg / ffprobe 定位（环境变量 → PATH → 常见位置）
 scripts/music.mjs             按画面生成配乐（4 套模板）
 assets/                       cover.gif / 分镜 / 成片
 ```
