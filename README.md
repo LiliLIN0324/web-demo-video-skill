@@ -177,6 +177,7 @@ CHANGELOG.md                 版本记录
 | 点击没反应，按钮却正常 | 按下与松开之间移动了指针或截了图 | 90ms 内不动不拍 |
 | 点击完全到不了应用 | 用了 `page.screenshot()`，点击落到 iframe 元素上 | 改 CDP `Page.captureScreenshot` |
 | 放大后点不中按钮 | iframe transform 下命中测试不稳 | 点击前瞬时归零相机，点完恢复 |
+| 推近后点按钮，页面毫无反应也不报错 | `getBoundingClientRect()` 在带 transform 的层里返回变换后的坐标 | 测量也先归零相机（`center` / `centerByText` 走 `measurePage()`） |
 | 推近后地图空白 | 相机变换了应用内部 `body` | 相机挂到顶层 `iframe` |
 | 筛选 chip 不生效 | 按压时间过长、中间拍帧 | 缩短到约 90ms |
 | 成片里有 1 秒多白屏 | 路由骨架屏被录进去 | 停拍，等目标元素就绪再继续 |

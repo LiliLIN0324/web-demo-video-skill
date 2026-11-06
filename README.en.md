@@ -177,6 +177,7 @@ CHANGELOG.md                 Version history
 | A second of white in the cut | route skeleton was captured | pause, wait for the target element |
 | Video looks brighter / more saturated | missing full→tv conversion and bt709 tags | explicit `scale` + `color_*`, plus `-x264-params` so the bitstream VUI is tagged too |
 | `dsf = 2` but frames are still 1920×1080 | `deviceScaleFactor` does nothing to CDP screenshots | use `clip.scale` in `Page.captureScreenshot` (template already does) |
+| Clicked a button while zoomed, page did nothing, no error | `getBoundingClientRect()` inside a transformed layer returns transformed coordinates | measure with the camera zeroed too (`center` / `centerByText` use `measurePage()`) |
 | Browser disappears mid-run | headful window closed by the user | `headless: true` |
 
 ## Stack & dependencies
