@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.2 — 2026-11-07
+
+新增 `scripts/compress.mjs`：把**已有的** mp4 压小（封面片段、别人给的片子），压完自己出 PASS/FAIL 表。起因是官网四条封面片段共 614.5 MB，点开作品页就等于下载整条片子。
+
+- **P0 · 转码不动帧率**：`compress.mjs` 压根没有 `--fps` / `-r` 入口，帧率照搬源，只有源比 `--width`（默认 1920）宽时才插 `scale`，永不放大。以前手敲 `-r 30` 会把 23fps 的源插成重复帧：实测 196 秒那条从 4512 帧变成 5883 帧（每 30 帧只有 23 帧是新的）。
+- **P0 · 色差按帧号配对，不按时间戳**：时间戳取样在 VFR 源上会落到帧边界两侧，同一条 peace 片子按时间戳报 Y 13.69/255（看着像严重偏色），按帧号报 Y 1.79——取的根本不是同一帧。VFR 归一化还会少一帧（实测 3311 → 3310）导致后面整体错一位，所以在 ±3 帧窗口里取差最小的配对：错位的取样点自动纠正成 Y 1.22。
+- **P1 · 转码专用的色差闸门 Y ≤ 2.5 / U ≤ 1.5**：和 `verify.mjs` 那条 Y < 2 不是一回事。转码后运动帧剩下的是压缩残差，几乎全在 Y（色度二次采样后 UV 基本不动）；实测静止帧 Y 0.02、运动帧 1.7–2.1、U 全程 ≤ 0.69。真把 range/matrix 搞错是每个取样点一起高，不会因为画面静止落到 0.02。
+- **P1 · CRF 档位靠 1:1 裁切定**：peace 那条 1380×774 的宣传片，CRF 29 各项指标全绿，把字幕区域 1:1 裁出来边缘已经发糊；CRF 23 与源一致，于是留 50.3 MB 而不是 26.6 MB。写进 SKILL.md：指标只当次级证据，文字/细线/logo 边缘自己看。
+- **实测四条**（ffmpeg N-127507，`-preset slow`）：285.4 → 50.3 MB（CRF 23）、193.9 → 7.9 MB（4K 降 1080p）、82.7 → 21.7 MB、52.5 → 7.9 MB，合计 614.5 → 87.8 MB；四条全绿，音轨、bt709 容器+VUI、faststart 都在。
+- **文档**：SKILL.md 新增「压缩已有视频」一节（含 4 条判断与实测数），AGENTS.md 硬规则 11 → 12 条，中英 README 加快速开始命令与能力行。
+- **派生资产另开 key**：覆盖 CDN 上的旧对象会撞上 `max-age=31536000, immutable` 的边缘缓存，所以压轻版走新路径，回退只要改一行引用。
+
 ## 0.2.1 — 2026-11-06
 
 把「文档里写了、但换个机器/换个人就会坏」的地方改成脚本自己兜住。全部数字来自本机实跑（真页面：幕景宇宙 · 咪目 AI 接待助手，723 帧 / 24.1s）。
@@ -67,6 +79,18 @@
 首个版本：系统 Chrome + 逐帧截图 + 注入鼠标指针 + CDP 真实输入 + ffmpeg 合成，含双语 README 与避坑清单。
 
 ---
+
+## 0.2.2 — 2026-11-07
+
+New `scripts/compress.mjs`: makes an **existing** mp4 smaller (cover clips, someone else's footage) and prints its own PASS/FAIL table. Prompted by four cover clips on the portfolio site weighing 614.5 MB in total — opening a work page meant downloading the whole film.
+
+- **P0 · transcoding no longer touches the frame rate**: `compress.mjs` has no `--fps` / `-r` switch at all. Frame rate comes from the source, `scale` is inserted only when the source is wider than `--width` (1920 by default), and it never upscales. Hand-written `-r 30` used to pad a 23fps source with duplicate frames: measured, a 196 s clip went from 4512 frames to 5883 (only 23 of every 30 are new).
+- **P0 · colour diff matched by frame index, not timestamp**: timestamp seeking lands on either side of a frame boundary on VFR sources. The same peace clip reported Y 13.69/255 by timestamp (looks like a bad colour shift) and Y 1.79 by frame index — it simply wasn't the same frame. Normalising a VFR source can also drop a frame (measured 3311 → 3310), shifting every later index, so each sample is paired with its best match inside a ±3-frame window: the misaligned sample corrected itself to Y 1.22.
+- **P1 · a transcode-specific colour gate, Y ≤ 2.5 / U ≤ 1.5**: deliberately different from `verify.mjs`'s Y < 2. After a transcode what remains on moving frames is compression residue, almost entirely in Y (chroma is subsampled and barely moves): measured Y 0.02 on a still frame, 1.7–2.1 on moving ones, U ≤ 0.69 throughout. A real range/matrix mistake raises every sample together and never falls back to 0.02.
+- **P1 · CRF is chosen by a 1:1 crop, not by the metrics**: the 1380×774 peace piece passed every metric at CRF 29, but cropping the subtitle band at 1:1 showed soft edges; CRF 23 matched the source, so it keeps 50.3 MB instead of 26.6 MB. Written into SKILL.md: metrics are secondary evidence — look at text, hairlines and logo edges yourself.
+- **Measured four clips** (ffmpeg N-127507, `-preset slow`): 285.4 → 50.3 MB (CRF 23), 193.9 → 7.9 MB (4K → 1080p), 82.7 → 21.7 MB, 52.5 → 7.9 MB; 614.5 → 87.8 MB all together. All four green, audio track, bt709 container + VUI and faststart intact.
+- **Docs**: new "compressing existing footage" chapter in SKILL.md, AGENTS.md non-negotiables 11 → 12, both READMEs gained the command and a capability row.
+- **Derived assets get their own key**: overwriting an object on a CDN runs into the edge cache holding `max-age=31536000, immutable`, so the lite version lives at a new path and reverting is a one-line reference change.
 
 ## 0.2.1 — 2026-11-06
 

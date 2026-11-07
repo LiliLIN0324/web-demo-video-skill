@@ -12,9 +12,9 @@
 
 1. 先读 `SKILL.md`（完整流程、坑位、镜头、配乐、iframe 场景）。
 2. 复制 `scripts/record-template.mjs` 到工作目录，改 `CFG` 和末尾「编排」，不要直接改模板。
-3. 产物用 `scripts/encode.mjs` 合成；配乐用 `scripts/music.mjs`（带 4 套风格模板）生成后混流。
+3. 产物用 `scripts/encode.mjs` 合成；配乐用 `scripts/music.mjs`（带 4 套风格模板）生成后混流；已经是成片的素材要变小，用 `scripts/compress.mjs`。
 
-## 不可省略的 11 条
+## 不可省略的 12 条
 
 违反任意一条，成片就会出问题：
 
@@ -29,6 +29,7 @@
 9. **相机挂在顶层 `iframe` 上，不要变换应用内部的 `body`** —— 后者会让 WebGL 地图掉瓦片。
 10. **合成时显式 `scale=in_range=full:out_range=tv:…bt709` + `color_*` 标签，并且再补 `-x264-params "colorprim=bt709:transfer=bt709:colormatrix=bt709"`** —— 只给 `color_*` 时容器是 bt709 但码流 VUI 仍是 `unknown`，播放器按自己的默认解释，成片仍会偏亮偏艳。`encode.mjs` 两条一起发。
 11. **出片先跑 `scripts/verify.mjs`** —— 它会打印 PASS/FAIL 表并把关键帧拼成一张图；有 FAIL 返回非 0。别只看"文件生成了、能播放"。
+12. **压缩已有的 mp4 用 `scripts/compress.mjs`，别手敲 `-r 30`** —— 源已经是成片，重采样帧率等于插重复帧（实测 23fps / 196s 那条从 4512 帧变 5883 帧），还会让按时间取样的色差闸门失真。这个脚本压根没有帧率参数：帧率照搬源，只降分辨率、永不放大，压完自带验收。
 
 ## 流程
 
@@ -51,6 +52,8 @@ node scripts/verify.mjs ./frames ./final.mp4 --events ./events.json    # PASS/FA
 
 `node scripts/verify.mjs ./frames ./final.mp4 --events ./events.json` 一屏看完：分辨率（按源帧比例推）、色彩标签（容器 + 码流）、帧数、时长、faststart（真去字节里看 `moov` 在 `mdat` 前）、码率、与源 PNG 的平均 YUV 差（≤2/255）、最差帧 PSNR（≥22 dB 的哨兵）、响度（−19 ~ −14 LUFS）。再肉眼扫一遍拼图：点击瞬间、推近落点、状态切换、结尾。中间产物（`frames/`）出片后删除。
 
+压已有成片走 `scripts/compress.mjs`，它压完自己出同一张表（色差按帧号配对、Y ≤ 2.5 / U ≤ 1.5），不需要再跑 verify——verify 需要帧目录，转码没有。
+
 ## 文件
 
 ```
@@ -58,6 +61,7 @@ SKILL.md                      完整指南（必读）
 AGENTS.md                     本文件：通用入口
 scripts/record-template.mjs   录制器模板（指针、相机、点击、CDP 截图带 clip.scale、events.json 增量落盘）
 scripts/encode.mjs            帧序列 → mp4（4K 自动降 1080p、bt709 容器+VUI、--audio 混轨）
+scripts/compress.mjs          已有 mp4 → 更小的 mp4（不动帧率、不放大、压完自带 PASS/FAIL 表）
 scripts/verify.mjs            出片前的 PASS/FAIL 表 + 关键帧拼图
 scripts/ffmpeg.mjs            ffmpeg / ffprobe 定位（环境变量 → PATH → 常见位置）
 scripts/music.mjs             按画面生成配乐（4 套模板）

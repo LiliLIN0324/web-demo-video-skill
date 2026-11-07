@@ -1,6 +1,6 @@
 ---
 name: web-demo-video
-version: 0.2.1
+version: 0.2.2
 description: 把网页/交互 demo 录成 1080p 演示视频：可见鼠标指针、真实悬停与点击、逐帧截图保顺滑、按面板变化推近的镜头、按画面生成的配乐、ffmpeg 合成。Use when asked to record a web demo, make a product/demo video from a live page, or "simulate mouse operations" for a video. 触发词：录 demo、录屏、演示视频、操作视频、鼠标演示、模拟鼠标、点按钮。
 when_to_use: 用户要求把某个网页或 demo 录成视频，尤其是要求"要有鼠标操作感"或"镜头要有重点"时。
 ---
@@ -125,6 +125,20 @@ SPA 路由跳转、或点"查看完整活动"这类链接，往往会先渲染 1
 
 验收别只看标签，要看像素：`verify.mjs` 把成片解码帧和源 PNG 做 `blend=difference` 再 `signalstats` 取平均 YUV 差，正确时 Y/UV 都在 1–2/255；实测错位 5 帧会跳到 Y≈1.95。**不要拿 PSNR 当色差门槛**——指针涟漪、字体抗锯齿这类噪声内容即使完全对齐也只有 ~29 dB，PSNR 只留着当「≥22 dB 说明没拿错帧」的哨兵。
 
+## 压缩已有视频（不是自己录的片子）
+
+手上已经有一条 mp4，只想变小一点（封面片段、历史片子）时，规则和自己出的片不一样：
+
+```bash
+node scripts/compress.mjs ./in.mp4 ./out-lite.mp4            # 默认 CRF 29
+node scripts/compress.mjs ./in.mp4 ./out-lite.mp4 --crf 23   # 片子里有字幕/小字时
+```
+
+- **不要重采样帧率。** 源是 23/25fps 就照搬，只有需要降分辨率时才插 `scale`。一律加 `-r 30` 会重复插帧：23fps 的源压成 30fps，每 30 帧里只有 23 帧是新的（实测 196 秒那条从 4512 帧变成 5883 帧）。文件略大是小事，帧时序错位才是麻烦。`compress.mjs` 没有帧率参数，想犯错也没入口。
+- **按时间点取样比色差的闸门，帧时序一变就废。** 错位后同一时间戳落到不同源帧，静止画面实际只差 0.04/255，整段 YAVG 却报 2.1–2.9，看着像偏色。就算保住了帧率也别用时间取样：VFR 源上精确 seek 会落在帧边界两侧，一个镜头切换能把 Y 顶到 13/255。**比的是帧号**：`-vf select=eq(n\,i)` 取第 i 帧，两边同一序号必然是同一帧（`compress.mjs` 已这么做）。
+- **CRF 档位靠 1:1 裁切定，不靠指标。** 实测一条 1380×774 的宣传片字幕，CRF 29 各项指标全绿，裁出字幕区域 1:1 看边缘已经发糊；CRF 23 的字幕边缘和原片一致。取样看文字、细线、logo 边缘，码率只当次级证据。
+- **派生版另开一个 key，别覆盖原片。** CDN 对象带 `max-age=31536000, immutable`，覆盖后同 URL 的旧内容还在边缘缓存里；新版走新路径，改引用一处即可回退。
+
 ## 常见坑
 
 | 现象 | 原因 | 处理 |
@@ -222,6 +236,7 @@ scale=in_range=full:out_range=tv:in_color_matrix=bt709:out_color_matrix=bt709,fo
 - [scripts/record-template.mjs](scripts/record-template.mjs) — 录制器模板（指针、涟漪、90ms 真实点击、加载切镜、按面板推近的相机、iframe 模式、CDP 截图带 clip.scale、events.json 增量落盘）
 - [scripts/encode.mjs](scripts/encode.mjs) — 帧序列 → mp4（4K 自动降 1080p、bt709 写进容器和码流 VUI、两趟响度归一、`--audio` 一次混完）
 - [scripts/verify.mjs](scripts/verify.mjs) — 出片前的 PASS/FAIL 表 + 关键帧拼图（分辨率、色彩标签、帧数、faststart、色差、PSNR 哨兵、响度）；有 FAIL 返回非 0
+- [scripts/compress.mjs](scripts/compress.mjs) — 已有 mp4 → 更小的 mp4：不动帧率、只降宽度（永不放大）、bt709 容器+VUI、留音轨，压完自己出 PASS/FAIL 表
 - [scripts/ffmpeg.mjs](scripts/ffmpeg.mjs) — ffmpeg / ffprobe 定位（`FFMPEG` 环境变量 → PATH → 常见安装位置），encode 和 verify 共用
 - [scripts/music.mjs](scripts/music.mjs) — 按画面生成配乐（4 套模板 + 段落能量 + 点击/推镜对齐，纯 node 写 WAV）
 - [CHANGELOG.md](CHANGELOG.md) — 版本与改动

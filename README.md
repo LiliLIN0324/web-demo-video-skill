@@ -6,7 +6,7 @@
 
 真实鼠标轨迹 · 真实点击 · 逐帧可控 · 可选声轨
 
-[![version](https://img.shields.io/badge/version-0.2.1-111111?style=flat-square)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.2.2-111111?style=flat-square)](CHANGELOG.md)
 [![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square)](LICENSE)
 [![node](https://img.shields.io/badge/Node.js-18%2B-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 [![chrome](https://img.shields.io/badge/Chrome-system-4285F4?style=flat-square&logo=googlechrome&logoColor=white)](#依赖)
@@ -66,6 +66,7 @@
 | **声音可选** | 记录每次操作的帧号，后期对齐音效/人声；页面静音也能做出完整声轨 |
 | **无额外下载** | 系统 Chrome，不下载 Chromium；系统 ffmpeg，不用 Playwright 自带二进制 |
 | **出片有验收** | `verify.mjs` 一屏 PASS/FAIL：分辨率、色彩标签、帧数、faststart、与源图色差、响度，外加关键帧拼图；有问题返回非 0 |
+| **旧片子能压小不压坏** | `compress.mjs` 转码已有 mp4：帧率照搬源（不插重复帧）、只降宽度、永不放大，色差按帧号配对而不是按时间戳 |
 | **工具链的坑已趟平** | 截图走 CDP 而非 `page.screenshot()`；放大后点击自动归零相机再点；相机挂在 iframe 上，不比页面内部变换导致地图空白 |
 | **出片即清理** | `frames/` 是一次性产物，附清理约定，不会留下几百 MB 截图 |
 
@@ -95,6 +96,12 @@ node scripts/encode.mjs ./frames ./final.mp4 30 --audio ./score.wav
 
 ```bash
 node scripts/verify.mjs ./frames ./final.mp4 --events ./events.json
+```
+
+手上已经有一条 mp4（历史片子、别人给的封面片段）只要变小，用 `compress.mjs`：它不动帧率、只降宽度、永不放大，压完自己出 PASS/FAIL 表。
+
+```bash
+node scripts/compress.mjs ./in.mp4 ./out-lite.mp4 --crf 29   # 有字幕/小字时用 --crf 23
 ```
 
 ## 工作方式
@@ -164,6 +171,7 @@ CLAUDE.md / GEMINI.md        指向 AGENTS.md（给只认固定文件名的 agen
 scripts/record-template.mjs  录制器模板：指针、涟漪、90ms 点击、加载切镜、按面板推近的相机、iframe 模式
 scripts/encode.mjs           帧序列 → mp4：定位 ffmpeg、4K 自动降 1080p、淡入淡出、bt709/tv、--audio 混轨
 scripts/verify.mjs           出片前验收：PASS/FAIL 表 + 关键帧拼图
+scripts/compress.mjs         已有 mp4 → 更小的 mp4：不动帧率、不放大、留音轨，压完自带验收
 scripts/ffmpeg.mjs           ffmpeg / ffprobe 定位（环境变量 → PATH → 常见安装位置）
 scripts/music.mjs            按画面生成配乐：4 套模板 + 段落能量 + 点击/推镜对齐
 assets/                      演示 GIF、分镜图、成片
@@ -201,7 +209,7 @@ CHANGELOG.md                 版本记录
 
 ## 版本
 
-当前 **0.2.1**：把两处会毁掉成片的坑做实——4K 帧由 `encode.mjs` 自动降回 1080p（不再靠手加 `-vf`），ffmpeg 定位不再依赖某台机器的路径；新增 `verify.mjs`（分辨率 / 色彩 / 帧数 / faststart / 色差 / 响度 PASS/FAIL + 关键帧拼图）与 `--audio` 一次混轨（两趟 `loudnorm`，实测 -14.8 LUFS）；`events.json` 改为增量落盘，录制中途崩溃也保得住已录部分。同时修了一个假开关：`CFG.dsf` 以前只设 `deviceScaleFactor`，对 CDP 截图根本无效。上一版 0.2.0 重写镜头（按面板推近）与配乐模板化，0.1.0 加镜头原语与一键配乐，0.0.2 通用化，0.0.1 修正点击时序与颜色，0.0.0 为首版。
+当前 **0.2.2**：新增 `compress.mjs`，压**已有的** mp4 时不再犯两个会毁掉验收的错——它没有帧率参数（帧率照搬源，实测手敲 `-r 30` 会把 196 秒 23fps 的片子从 4512 帧插成 5883 帧），色差按帧号配对而不是按时间戳（同一条片子按时间戳报 Y 13.69、按帧号报 Y 1.79，取的根本不是同一帧）。官网四条封面片段因此从 614.5 MB 降到 87.8 MB。上一版 0.2.1 把两处会毁掉成片的坑做实——4K 帧由 `encode.mjs` 自动降回 1080p（不再靠手加 `-vf`），ffmpeg 定位不再依赖某台机器的路径；新增 `verify.mjs`（分辨率 / 色彩 / 帧数 / faststart / 色差 / 响度 PASS/FAIL + 关键帧拼图）与 `--audio` 一次混轨（两趟 `loudnorm`，实测 -14.8 LUFS）；`events.json` 改为增量落盘，录制中途崩溃也保得住已录部分。同时修了一个假开关：`CFG.dsf` 以前只设 `deviceScaleFactor`，对 CDP 截图根本无效。0.2.0 重写镜头（按面板推近）与配乐模板化，0.1.0 加镜头原语与一键配乐，0.0.2 通用化，0.0.1 修正点击时序与颜色，0.0.0 为首版。
 
 完整改动见 [CHANGELOG.md](CHANGELOG.md)。
 

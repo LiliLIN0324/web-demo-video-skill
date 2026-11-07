@@ -6,7 +6,7 @@
 
 Real cursor movement · real clicks · deterministic frames · optional soundtrack
 
-[![version](https://img.shields.io/badge/version-0.2.1-111111?style=flat-square)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.2.2-111111?style=flat-square)](CHANGELOG.md)
 [![license](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square)](LICENSE)
 [![node](https://img.shields.io/badge/Node.js-18%2B-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json)
 [![chrome](https://img.shields.io/badge/Chrome-system-4285F4?style=flat-square&logo=googlechrome&logoColor=white)](#requirements)
@@ -66,6 +66,7 @@ A real case: an AI marketing assistant hosted on ModelScope Studio — from logi
 | **No extra downloads** | system Chrome instead of Chromium; system ffmpeg instead of Playwright's binary |
 | **Clean workspace** | `frames/` is disposable; the workflow deletes it after the cut is rendered |
 | **Verified before shipping** | `verify.mjs`: resolution, colour tags, frame count, faststart, pixel diff against the source PNGs, loudness — PASS/FAIL plus a keyframe montage |
+| **Old cuts re-compressed safely** | `compress.mjs` transcodes an existing mp4: source frame rate kept (no duplicated frames), width only ever reduced, colour diff matched by frame index instead of timestamp |
 
 ## Quick start
 
@@ -93,6 +94,12 @@ Before shipping, verify the cut — one PASS/FAIL table plus a keyframe montage 
 
 ```bash
 node scripts/verify.mjs ./frames ./final.mp4 --events ./events.json
+```
+
+Already have an mp4 (an old cut, someone else's cover clip) and just need it smaller? `compress.mjs` keeps the source frame rate, only ever downscales, and prints its own PASS/FAIL table:
+
+```bash
+node scripts/compress.mjs ./in.mp4 ./out-lite.mp4 --crf 29   # use --crf 23 when there are subtitles
 ```
 
 ## How it works
@@ -162,6 +169,7 @@ CLAUDE.md / GEMINI.md        Pointers to AGENTS.md for agents that only read fix
 scripts/record-template.mjs  Recorder template: cursor, ripple, 90ms clicks, load cuts, panel-aware camera, iframe mode
 scripts/encode.mjs           Frames → mp4: locates ffmpeg, downscales 4K, fades, bt709/tv, --audio mux
 scripts/verify.mjs           Pre-ship gate: PASS/FAIL table + keyframe montage
+scripts/compress.mjs         Existing mp4 → smaller mp4: source fps kept, never upscaled, audio preserved, self-verified
 scripts/ffmpeg.mjs           ffmpeg / ffprobe discovery (env var → PATH → common install dirs)
 scripts/music.mjs            Score generated from the cut: 4 style presets, section energy, click/push-in alignment
 assets/                      Demo GIF, storyboard, full video
@@ -196,7 +204,7 @@ Only requirements: Node.js 18+ and `npm i playwright`. Chrome and ffmpeg come fr
 
 ## Version
 
-Current **0.2.1**: two failure modes made impossible rather than documented — 4K frames are downscaled to 1080p by `encode.mjs` itself (no more hand-written `-vf`), and ffmpeg discovery no longer depends on one machine's paths. Added `verify.mjs` (resolution / colour / frame count / faststart / pixel diff / loudness PASS-FAIL + keyframe montage) and `--audio`, which muxes in the same encode pass with two-pass loudnorm (measured −14.8 LUFS). `events.json` is now flushed per event, so a crash keeps everything recorded so far. Also fixed a fake switch: `CFG.dsf` used to set only `deviceScaleFactor`, which has no effect on CDP screenshots. 0.2.0 introduced the panel-aware camera and per-cut music; 0.1.0 added zoom primitives and a one-command score; 0.0.2 made the skill agent-agnostic; 0.0.1 fixed click timing and color; 0.0.0 was the first release.
+Current **0.2.2**: new `compress.mjs`, which removes two mistakes that used to make verification meaningless when re-compressing an **existing** mp4 — it has no frame-rate switch at all (the source rate is kept; hand-written `-r 30` turned a 196 s 23fps clip into 5883 frames instead of 4512), and the colour diff is paired by frame index rather than by timestamp (the same clip reported Y 13.69 by timestamp and Y 1.79 by index — it was not the same frame). Four cover clips on the portfolio site went from 614.5 MB to 87.8 MB because of it. 0.2.1 made two failure modes impossible rather than documented — 4K frames are downscaled to 1080p by `encode.mjs` itself (no more hand-written `-vf`), and ffmpeg discovery no longer depends on one machine's paths; added `verify.mjs` (resolution / colour / frame count / faststart / pixel diff / loudness PASS-FAIL + keyframe montage) and `--audio`, which muxes in the same encode pass with two-pass loudnorm (measured −14.8 LUFS). `events.json` is now flushed per event, so a crash keeps everything recorded so far. Also fixed a fake switch: `CFG.dsf` used to set only `deviceScaleFactor`, which has no effect on CDP screenshots. 0.2.0 introduced the panel-aware camera and per-cut music; 0.1.0 added zoom primitives and a one-command score; 0.0.2 made the skill agent-agnostic; 0.0.1 fixed click timing and color; 0.0.0 was the first release.
 
 See [CHANGELOG.md](CHANGELOG.md).
 
